@@ -10,8 +10,71 @@ from http.cookies import SimpleCookie
 from datetime import datetime, timezone
 from colorama import *
 import asyncio, binascii, random, json, re, os, pytz
+from dotenv import load_dotenv
+
+# Initialize colorama and load environment variables
+init(autoreset=True)
+load_dotenv()
 
 wib = pytz.timezone('Asia/Jakarta')
+
+# === Terminal Color Setup ===
+class Colors:
+    RESET = Style.RESET_ALL
+    BOLD = Style.BRIGHT
+    GREEN = Fore.GREEN
+    YELLOW = Fore.YELLOW
+    RED = Fore.RED
+    CYAN = Fore.CYAN
+    MAGENTA = Fore.MAGENTA
+    WHITE = Fore.WHITE
+    BRIGHT_GREEN = Fore.LIGHTGREEN_EX
+    BRIGHT_MAGENTA = Fore.LIGHTMAGENTA_EX
+    BRIGHT_WHITE = Fore.LIGHTWHITE_EX
+    BRIGHT_BLACK = Fore.LIGHTBLACK_EX
+
+class Logger:
+    @staticmethod
+    def log(label, symbol, msg, color):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"{Colors.BRIGHT_BLACK}[{timestamp}]{Colors.RESET} {color}[{symbol}] {msg}{Colors.RESET}")
+
+    @staticmethod
+    def info(msg): Logger.log("INFO", "✓", msg, Colors.GREEN)
+    @staticmethod
+    def warn(msg): Logger.log("WARN", "!", msg, Colors.YELLOW)
+    @staticmethod
+    def error(msg): Logger.log("ERR", "✗", msg, Colors.RED)
+    @staticmethod
+    def success(msg): Logger.log("OK", "+", msg, Colors.GREEN)
+    @staticmethod
+    def loading(msg): Logger.log("LOAD", "⟳", msg, Colors.CYAN)
+    @staticmethod
+    def step(msg): Logger.log("STEP", "➤", msg, Colors.WHITE)
+    @staticmethod
+    def swap(msg): Logger.log("SWAP", "↪️", msg, Colors.CYAN)
+    @staticmethod
+    def swapSuccess(msg): Logger.log("SWAP", "✅", msg, Colors.GREEN)
+
+logger = Logger()
+
+def clear_console():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+async def display_welcome_screen():
+    clear_console()
+    now = datetime.now()
+    print(f"{Colors.BRIGHT_GREEN}{Colors.BOLD}")
+    print("  ╔══════════════════════════════════════╗")
+    print("  ║           D Z A P   B O T            ║")
+    print("  ║                                      ║")
+    print(f"  ║     {Colors.YELLOW}{now.strftime('%H:%M:%S %d.%m.%Y')}{Colors.BRIGHT_GREEN}           ║")
+    print("  ║                                      ║")
+    print("  ║     MONAD TESTNET AUTOMATION         ║")
+    print(f"  ║   {Colors.BRIGHT_WHITE}ZonaAirdrop{Colors.BRIGHT_GREEN}  |  t.me/ZonaAirdr0p   ║")
+    print("  ╚══════════════════════════════════════╝")
+    print(f"{Colors.RESET}")
+    await asyncio.sleep(1)
 
 class KiteAi:
     def __init__(self) -> None:
@@ -72,24 +135,17 @@ class KiteAi:
         self.max_bridge_amount = 0
 
     def clear_terminal(self):
-        os.system('cls' if os.name == 'nt' else 'clear')
+        clear_console()
 
     def log(self, message):
         print(
-            f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
-            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}{message}",
+            f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Colors.RESET}"
+            f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}{message}",
             flush=True
         )
 
     def welcome(self):
-        print(
-            f"""
-        {Fore.GREEN + Style.BRIGHT}Kite Ai Ozone {Fore.BLUE + Style.BRIGHT}Auto BOT
-            """
-            f"""
-        {Fore.GREEN + Style.BRIGHT}Rey? {Fore.YELLOW + Style.BRIGHT}<INI WATERMARK>
-            """
-        )
+        asyncio.run(display_welcome_screen())
 
     def format_seconds(self, seconds):
         hours, remainder = divmod(seconds, 3600)
@@ -100,7 +156,6 @@ class KiteAi:
         try:
             with open("2captcha_key.txt", 'r') as file:
                 captcha_key = file.read().strip()
-
             return captcha_key
         except Exception as e:
             return None
@@ -109,7 +164,7 @@ class KiteAi:
         filename = "agents.json"
         try:
             if not os.path.exists(filename):
-                self.log(f"{Fore.RED}File {filename} Not Found.{Style.RESET_ALL}")
+                self.log(f"{Colors.RED}File {filename} Not Found.{Colors.RESET}")
                 return
 
             with open(filename, 'r') as file:
@@ -124,6 +179,12 @@ class KiteAi:
         filename = "proxy.txt"
         try:
             if use_proxy_choice == 1:
+                if not os.path.exists(filename):
+                    self.log(f"{Colors.RED + Colors.BOLD}File {filename} Not Found.{Colors.RESET}")
+                    return
+                with open(filename, 'r') as f:
+                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
+            else:
                 async with ClientSession(timeout=ClientTimeout(total=30)) as session:
                     async with session.get("https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt") as response:
                         response.raise_for_status()
@@ -131,24 +192,18 @@ class KiteAi:
                         with open(filename, 'w') as f:
                             f.write(content)
                         self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
-            else:
-                if not os.path.exists(filename):
-                    self.log(f"{Fore.RED + Style.BRIGHT}File {filename} Not Found.{Style.RESET_ALL}")
-                    return
-                with open(filename, 'r') as f:
-                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
             
             if not self.proxies:
-                self.log(f"{Fore.RED + Style.BRIGHT}No Proxies Found.{Style.RESET_ALL}")
+                self.log(f"{Colors.RED + Colors.BOLD}No Proxies Found.{Colors.RESET}")
                 return
 
             self.log(
-                f"{Fore.GREEN + Style.BRIGHT}Proxies Total  : {Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT}{len(self.proxies)}{Style.RESET_ALL}"
+                f"{Colors.GREEN + Colors.BOLD}Proxies Total  : {Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD}{len(self.proxies)}{Colors.RESET}"
             )
         
         except Exception as e:
-            self.log(f"{Fore.RED + Style.BRIGHT}Failed To Load Proxies: {e}{Style.RESET_ALL}")
+            self.log(f"{Colors.RED + Colors.BOLD}Failed To Load Proxies: {e}{Colors.RESET}")
             self.proxies = []
 
     def check_proxy_schemes(self, proxies):
@@ -198,7 +253,6 @@ class KiteAi:
         try:
             account = Account.from_key(account)
             address = account.address
-            
             return address
         except Exception as e:
             return None
@@ -356,8 +410,8 @@ class KiteAi:
 
         except Exception as e:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Message :{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Message :{Colors.RESET}"
+                f"{Colors.RED+Colors.BOLD} {str(e)} {Colors.RESET}"
             )
             return None
         
@@ -430,19 +484,19 @@ class KiteAi:
 
         except Exception as e:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Message :{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Message :{Colors.RESET}"
+                f"{Colors.RED+Colors.BOLD} {str(e)} {Colors.RESET}"
             )
             return None, None, None
         
     async def print_timer(self, type: str):
         for remaining in range(random.randint(5, 10), 0, -1):
             print(
-                f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-                f"{Fore.BLUE + Style.BRIGHT}Wait For{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {remaining} {Style.RESET_ALL}"
-                f"{Fore.BLUE + Style.BRIGHT}Seconds For Next {type}...{Style.RESET_ALL}",
+                f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}"
+                f"{Colors.BLUE + Colors.BOLD}Wait For{Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD} {remaining} {Colors.RESET}"
+                f"{Colors.BLUE + Colors.BOLD}Seconds For Next {type}...{Colors.RESET}",
                 end="\r",
                 flush=True
             )
@@ -451,61 +505,61 @@ class KiteAi:
     def print_chat_question(self):
         while True:
             try:
-                chat_count = int(input(f"{Fore.YELLOW + Style.BRIGHT}AI Agent Chat Count? -> {Style.RESET_ALL}").strip())
+                chat_count = int(input(f"{Colors.YELLOW + Colors.BOLD}AI Agent Chat Count? -> {Colors.RESET}").strip())
                 if chat_count > 0:
                     self.chat_count = chat_count
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter positive number.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter positive number.{Colors.RESET}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number.{Style.RESET_ALL}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
 
     def print_bridge_question(self):
         while True:
             try:
-                bridge_count = int(input(f"{Fore.YELLOW + Style.BRIGHT}Bridge Transaction Count? -> {Style.RESET_ALL}").strip())
+                bridge_count = int(input(f"{Colors.YELLOW + Colors.BOLD}Bridge Transaction Count? -> {Colors.RESET}").strip())
                 if bridge_count > 0:
                     self.bridge_count = bridge_count
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter positive number.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter positive number.{Colors.RESET}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number.{Style.RESET_ALL}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
 
         while True:
             try:
-                min_bridge_amount = float(input(f"{Fore.YELLOW + Style.BRIGHT}Min Bridge Amount? -> {Style.RESET_ALL}").strip())
+                min_bridge_amount = float(input(f"{Colors.YELLOW + Colors.BOLD}Min Bridge Amount? -> {Colors.RESET}").strip())
                 if min_bridge_amount > 0:
                     self.min_bridge_amount = min_bridge_amount
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Amount must be greater than 0.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Amount must be greater than 0.{Colors.RESET}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number.{Style.RESET_ALL}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
 
         while True:
             try:
-                max_bridge_amount = float(input(f"{Fore.YELLOW + Style.BRIGHT}Max Bridge Amount? -> {Style.RESET_ALL}").strip())
+                max_bridge_amount = float(input(f"{Colors.YELLOW + Colors.BOLD}Max Bridge Amount? -> {Colors.RESET}").strip())
                 if max_bridge_amount >= min_bridge_amount:
                     self.max_bridge_amount = max_bridge_amount
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Amount must be >= Min Bridge Amount.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Amount must be >= Min Bridge Amount.{Colors.RESET}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number.{Style.RESET_ALL}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
         
     def print_question(self):
         while True:
             try:
-                print(f"{Fore.GREEN + Style.BRIGHT}Select Option:{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}1. Claim Faucet{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}2. Daily Quiz{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}3. Stake Token{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}4. Unstake Token{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}5. AI Agent Chat{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}6. Random Bridge{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}7. Run All Features{Style.RESET_ALL}")
-                option = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1/2/3/4/5/6/7] -> {Style.RESET_ALL}").strip())
+                print(f"{Colors.GREEN + Colors.BOLD}Select Option:{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}1. Claim Faucet{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}2. Daily Quiz{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}3. Stake Token{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}4. Unstake Token{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}5. AI Agent Chat{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}6. Random Bridge{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}7. Run All Features{Colors.RESET}")
+                option = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2/3/4/5/6/7] -> {Colors.RESET}").strip())
 
                 if option in [1, 2, 3, 4, 5, 6, 7]:
                     option_type = (
@@ -517,12 +571,12 @@ class KiteAi:
                         "Random Bridge" if option == 6 else 
                         "Run All Features"
                     )
-                    print(f"{Fore.GREEN + Style.BRIGHT}{option_type} Selected.{Style.RESET_ALL}")
+                    print(f"{Colors.GREEN + Colors.BOLD}{option_type} Selected.{Colors.RESET}")
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter either 1, 2, 3, 4, 5, 6, or 7.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1, 2, 3, 4, 5, 6, or 7.{Colors.RESET}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number (1, 2, 3, 4, 5, 6, or 7).{Style.RESET_ALL}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1, 2, 3, 4, 5, 6, or 7).{Colors.RESET}")
 
         if option == 5:
             self.print_chat_question()
@@ -532,39 +586,39 @@ class KiteAi:
 
         elif option == 7:
             while True:
-                auto_faucet = input(f"{Fore.YELLOW + Style.BRIGHT}Auto Claim Kite Token Faucet? [y/n] -> {Style.RESET_ALL}").strip()
+                auto_faucet = input(f"{Colors.YELLOW + Colors.BOLD}Auto Claim Kite Token Faucet? [y/n] -> {Colors.RESET}").strip()
                 if auto_faucet in ["y", "n"]:
                     self.auto_faucet = auto_faucet == "y"
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
 
             while True:
-                auto_quiz = input(f"{Fore.YELLOW + Style.BRIGHT}Auto Complete Daily Quiz? [y/n] -> {Style.RESET_ALL}").strip()
+                auto_quiz = input(f"{Colors.YELLOW + Colors.BOLD}Auto Complete Daily Quiz? [y/n] -> {Colors.RESET}").strip()
                 if auto_quiz in ["y", "n"]:
                     self.auto_quiz = auto_quiz == "y"
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
 
             while True:
-                auto_stake = input(f"{Fore.YELLOW + Style.BRIGHT}Auto Stake Kite Token Faucet? [y/n] -> {Style.RESET_ALL}").strip()
+                auto_stake = input(f"{Colors.YELLOW + Colors.BOLD}Auto Stake Kite Token Faucet? [y/n] -> {Colors.RESET}").strip()
                 if auto_stake in ["y", "n"]:
                     self.auto_stake = auto_stake == "y"
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
 
             while True:
-                auto_unstake = input(f"{Fore.YELLOW + Style.BRIGHT}Auto Unstake Kite Token Faucet? [y/n] -> {Style.RESET_ALL}").strip()
+                auto_unstake = input(f"{Colors.YELLOW + Colors.BOLD}Auto Unstake Kite Token Faucet? [y/n] -> {Colors.RESET}").strip()
                 if auto_unstake in ["y", "n"]:
                     self.auto_unstake = auto_unstake == "y"
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
 
             while True:
-                auto_chat = input(f"{Fore.YELLOW + Style.BRIGHT}Auto Chat With AI Agent? [y/n] -> {Style.RESET_ALL}").strip()
+                auto_chat = input(f"{Colors.YELLOW + Colors.BOLD}Auto Chat With AI Agent? [y/n] -> {Colors.RESET}").strip()
                 if auto_chat in ["y", "n"]:
                     self.auto_chat = auto_chat == "y"
 
@@ -572,10 +626,10 @@ class KiteAi:
                         self.print_chat_question()
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
 
             while True:
-                auto_bridge = input(f"{Fore.YELLOW + Style.BRIGHT}Auto Perform Random Bridge? [y/n] -> {Style.RESET_ALL}").strip()
+                auto_bridge = input(f"{Colors.YELLOW + Colors.BOLD}Auto Perform Random Bridge? [y/n] -> {Colors.RESET}").strip()
                 if auto_bridge in ["y", "n"]:
                     self.auto_bridge = auto_bridge == "y"
                     
@@ -583,38 +637,38 @@ class KiteAi:
                         self.print_bridge_question()
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
 
         while True:
             try:
-                print(f"{Fore.WHITE + Style.BRIGHT}1. Run With Proxyscrape Free Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}2. Run With Private Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}3. Run Without Proxy{Style.RESET_ALL}")
-                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1/2/3] -> {Style.RESET_ALL}").strip())
+                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Private Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}2. Run With Proxyscrape Free Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}3. Run Without Proxy{Colors.RESET}")
+                choose = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2/3] -> {Colors.RESET}").strip())
 
                 if choose in [1, 2, 3]:
                     proxy_type = (
-                        "With Proxyscrape Free" if choose == 1 else 
-                        "With Private" if choose == 2 else 
+                        "With Private" if choose == 1 else 
+                        "With Proxyscrape Free" if choose == 2 else 
                         "Without"
                     )
-                    print(f"{Fore.GREEN + Style.BRIGHT}Run {proxy_type} Proxy Selected.{Style.RESET_ALL}")
+                    print(f"{Colors.GREEN + Colors.BOLD}Run {proxy_type} Proxy Selected.{Colors.RESET}")
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter either 1, 2 or 3.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1, 2 or 3.{Colors.RESET}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number (1, 2 or 3).{Style.RESET_ALL}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1, 2 or 3).{Colors.RESET}")
 
         rotate = False
         if choose in [1, 2]:
             while True:
-                rotate = input(f"{Fore.BLUE + Style.BRIGHT}Rotate Invalid Proxy? [y/n] -> {Style.RESET_ALL}").strip()
+                rotate = input(f"{Colors.BLUE + Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip()
 
                 if rotate in ["y", "n"]:
                     rotate = rotate == "y"
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter 'y' or 'n'.{Colors.RESET}")
 
         return option, choose, rotate
     
@@ -625,9 +679,9 @@ class KiteAi:
                     
                     if self.CAPTCHA_KEY is None:
                         self.log(
-                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                            f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                            f"{Fore.YELLOW + Style.BRIGHT} 2Captcha Key Is None {Style.RESET_ALL}"
+                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                            f"{Colors.YELLOW + Colors.BOLD} 2Captcha Key Is None {Colors.RESET}"
                         )
                         return None
 
@@ -640,18 +694,18 @@ class KiteAi:
                             err_text = result.get("error_text", "Unknown Error")
                             
                             self.log(
-                                f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                                f"{Fore.BLUE + Style.BRIGHT}Message :{Style.RESET_ALL}"
-                                f"{Fore.YELLOW + Style.BRIGHT} {err_text} {Style.RESET_ALL}"
+                                f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                                f"{Colors.BLUE + Colors.BOLD}Message :{Colors.RESET}"
+                                f"{Colors.YELLOW + Colors.BOLD} {err_text} {Colors.RESET}"
                             )
                             await asyncio.sleep(5)
                             continue
 
                         request_id = result.get("request")
                         self.log(
-                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                            f"{Fore.BLUE + Style.BRIGHT}Req Id  :{Style.RESET_ALL}"
-                            f"{Fore.WHITE + Style.BRIGHT} {request_id} {Style.RESET_ALL}"
+                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                            f"{Colors.BLUE + Colors.BOLD}Req Id  :{Colors.RESET}"
+                            f"{Colors.WHITE + Colors.BOLD} {request_id} {Colors.RESET}"
                         )
 
                         for _ in range(30):
@@ -665,9 +719,9 @@ class KiteAi:
                                     return recaptcha_token
                                 elif res_result.get("request") == "CAPCHA_NOT_READY":
                                     self.log(
-                                        f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                                        f"{Fore.BLUE + Style.BRIGHT}Message :{Style.RESET_ALL}"
-                                        f"{Fore.YELLOW + Style.BRIGHT} Recaptcha Not Ready {Style.RESET_ALL}"
+                                        f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                                        f"{Colors.BLUE + Colors.BOLD}Message :{Colors.RESET}"
+                                        f"{Colors.YELLOW + Colors.BOLD} Recaptcha Not Ready {Colors.RESET}"
                                     )
                                     await asyncio.sleep(5)
                                     continue
@@ -679,11 +733,11 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED + Style.BRIGHT} Recaptcha Unsolved {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW + Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.RED + Colors.BOLD} Recaptcha Unsolved {Colors.RESET}"
+                    f"{Colors.MAGENTA + Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW + Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
                 return None
     
@@ -696,10 +750,10 @@ class KiteAi:
                     return True
         except (Exception, ClientResponseError) as e:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} Connection Not 200 OK {Style.RESET_ALL}"
-                f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
+                f"{Colors.RED+Colors.BOLD} Connection Not 200 OK {Colors.RESET}"
+                f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
             )
         
         return None
@@ -736,10 +790,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Login Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Login Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
         
         return None, None
@@ -764,10 +818,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Fetch User Data Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Fetch User Data Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -795,11 +849,11 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Not Claimed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Not Claimed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -828,10 +882,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Daily Quiz:{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} GET Id Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Daily Quiz:{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} GET Id Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -857,11 +911,11 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} GET Question & Answer Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} GET Question & Answer Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -890,11 +944,11 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Submit Answer Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Submit Answer Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -919,10 +973,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Error     :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} GET Balance Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Error     :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} GET Balance Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -950,10 +1004,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Stake     :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -981,10 +1035,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Unstake   :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Unstake   :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -1026,11 +1080,11 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Agents Didn't Respond {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Agents Didn't Respond {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -1059,11 +1113,11 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Submit Receipt Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Submit Receipt Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -1090,10 +1144,10 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}     Submit  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Failed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}     Submit  :{Colors.RESET}"
+                    f"{Colors.RED+Colors.BOLD} Failed {Colors.RESET}"
+                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
                 )
 
         return None
@@ -1102,71 +1156,71 @@ class KiteAi:
         tx_hash, block_number, amount_to_wei = await self.perform_bridge(account, address, rpc_url, dest_chain_id, src_address, amount, token_type, use_proxy)
         if tx_hash and block_number and amount_to_wei:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Status  :{Style.RESET_ALL}"
-                f"{Fore.GREEN+Style.BRIGHT} Success {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Status  :{Colors.RESET}"
+                f"{Colors.GREEN+Colors.BOLD} Success {Colors.RESET}"
             )
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Block   :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {block_number} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Block   :{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {block_number} {Colors.RESET}"
             )
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Tx Hash :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {tx_hash} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Tx Hash :{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {tx_hash} {Colors.RESET}"
             )
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Explorer:{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {explorer}{tx_hash} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Explorer:{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {explorer}{tx_hash} {Colors.RESET}"
             )
 
             submit = await self.submit_bridge_transfer(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash, use_proxy)
             if submit:
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}     Submit  :{Style.RESET_ALL}"
-                    f"{Fore.GREEN+Style.BRIGHT} Success  {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}     Submit  :{Colors.RESET}"
+                    f"{Colors.GREEN+Colors.BOLD} Success  {Colors.RESET}"
                 )
 
         else:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Status  :{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} Perform On-Chain Failed {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Status  :{Colors.RESET}"
+                f"{Colors.RED+Colors.BOLD} Perform On-Chain Failed {Colors.RESET}"
             )
 
     async def process_option_1(self, address: str, user: dict, use_proxy: bool):
         is_claimable = user.get("data", {}).get("faucet_claimable", False)
         if is_claimable:
-            self.log(f"{Fore.CYAN+Style.BRIGHT}Faucet    :{Style.RESET_ALL}")
+            self.log(f"{Colors.CYAN+Colors.BOLD}Faucet    :{Colors.RESET}")
 
             self.log(
-                f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                f"{Fore.YELLOW + Style.BRIGHT}Solving Recaptcha...{Style.RESET_ALL}"
+                f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                f"{Colors.YELLOW + Colors.BOLD}Solving Recaptcha...{Colors.RESET}"
             )
 
             recaptcha_token = await self.solve_recaptcha()
             if recaptcha_token:
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Message :{Style.RESET_ALL}"
-                    f"{Fore.GREEN + Style.BRIGHT} Recaptcha Solved Successfully {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Message :{Colors.RESET}"
+                    f"{Colors.GREEN + Colors.BOLD} Recaptcha Solved Successfully {Colors.RESET}"
                 )
 
                 claim = await self.claim_faucet(address, recaptcha_token, use_proxy)
                 if claim:
                     self.log(
-                        f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                        f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                        f"{Fore.GREEN + Style.BRIGHT} Claimed Successfully {Style.RESET_ALL}"
+                        f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                        f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                        f"{Colors.GREEN + Colors.BOLD} Claimed Successfully {Colors.RESET}"
                     )
 
         else:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}Faucet    :{Style.RESET_ALL}"
-                f"{Fore.YELLOW+Style.BRIGHT} Not Time to Claim {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}Faucet    :{Colors.RESET}"
+                f"{Colors.YELLOW+Colors.BOLD} Not Time to Claim {Colors.RESET}"
             )
 
     async def process_option_2(self, address: str, use_proxy: bool):
         create = await self.create_quiz(address, use_proxy)
         if create:
-            self.log(f"{Fore.CYAN+Style.BRIGHT}Daily Quiz:{Style.RESET_ALL}")
+            self.log(f"{Colors.CYAN+Colors.BOLD}Daily Quiz:{Colors.RESET}")
 
             quiz_id = create.get("data", {}).get("quiz_id")
             status = create.get("data", {}).get("status")
@@ -1184,14 +1238,14 @@ class KiteAi:
                                 quiz_answer = quiz_question.get("answer")
 
                                 self.log(
-                                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                                    f"{Fore.BLUE + Style.BRIGHT}Question:{Style.RESET_ALL}"
-                                    f"{Fore.WHITE+Style.BRIGHT} {quiz_content} {Style.RESET_ALL}"
+                                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                                    f"{Colors.BLUE + Colors.BOLD}Question:{Colors.RESET}"
+                                    f"{Colors.WHITE+Colors.BOLD} {quiz_content} {Colors.RESET}"
                                 )
                                 self.log(
-                                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                                    f"{Fore.BLUE + Style.BRIGHT}Answer  :{Style.RESET_ALL}"
-                                    f"{Fore.WHITE+Style.BRIGHT} {quiz_answer} {Style.RESET_ALL}"
+                                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                                    f"{Colors.BLUE + Colors.BOLD}Answer  :{Colors.RESET}"
+                                    f"{Colors.WHITE+Colors.BOLD} {quiz_answer} {Colors.RESET}"
                                 )
 
                                 submit_quiz = await self.submit_quiz(address, quiz_id, question_id, quiz_answer, use_proxy)
@@ -1200,29 +1254,29 @@ class KiteAi:
 
                                     if result == "RIGHT":
                                         self.log(
-                                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                                            f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                                            f"{Fore.GREEN+Style.BRIGHT} Answered Successfully {Style.RESET_ALL}"
+                                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                                            f"{Colors.GREEN+Colors.BOLD} Answered Successfully {Colors.RESET}"
                                         )
                                     else:
                                         self.log(
-                                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                                            f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                                            f"{Fore.YELLOW+Style.BRIGHT} Wrong Answer {Style.RESET_ALL}"
+                                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                                            f"{Colors.YELLOW+Colors.BOLD} Wrong Answer {Colors.RESET}"
                                         )
 
                     else:
                         self.log(
-                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                            f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                            f"{Fore.RED+Style.BRIGHT} GET Quiz Answer Failed {Style.RESET_ALL}"
+                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                            f"{Colors.RED+Colors.BOLD} GET Quiz Answer Failed {Colors.RESET}"
                         )
 
             else:
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.YELLOW + Style.BRIGHT} Already Answered {Style.RESET_ALL}"
+                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
+                    f"{Colors.YELLOW + Colors.BOLD} Already Answered {Colors.RESET}"
                 )
 
     async def process_option_3(self, address: str, use_proxy: bool):
@@ -1234,17 +1288,17 @@ class KiteAi:
                 stake = await self.stake_token(address, use_proxy)
                 if stake:
                     self.log(
-                        f"{Fore.CYAN+Style.BRIGHT}Stake     :{Style.RESET_ALL}"
-                        f"{Fore.GREEN+Style.BRIGHT} Success {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                        f"{Fore.CYAN+Style.BRIGHT} Amount: {Style.RESET_ALL}"
-                        f"{Fore.WHITE+Style.BRIGHT}1 KITE{Style.RESET_ALL}"
+                        f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
+                        f"{Colors.GREEN+Colors.BOLD} Success {Colors.RESET}"
+                        f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                        f"{Colors.CYAN+Colors.BOLD} Amount: {Colors.RESET}"
+                        f"{Colors.WHITE+Colors.BOLD}1 KITE{Colors.RESET}"
                     )
 
             else:
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Stake     :{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} Insufficinet Kite Token Balance {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} Insufficinet Kite Token Balance {Colors.RESET}"
                 )
 
     async def process_option_4(self, address: str, use_proxy: bool):
@@ -1252,25 +1306,25 @@ class KiteAi:
         if unstake:
             reward = unstake.get("data", {}).get("claim_amount", 0)
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}Unstake   :{Style.RESET_ALL}"
-                f"{Fore.GREEN+Style.BRIGHT} Success {Style.RESET_ALL}"
-                f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                f"{Fore.CYAN+Style.BRIGHT} Reward: {Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT}{reward} KITE{Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}Unstake   :{Colors.RESET}"
+                f"{Colors.GREEN+Colors.BOLD} Success {Colors.RESET}"
+                f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
+                f"{Colors.CYAN+Colors.BOLD} Reward: {Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD}{reward} KITE{Colors.RESET}"
             )
 
     async def process_option_5(self, address: str, sa_address: str, use_proxy: bool):
-        self.log(f"{Fore.CYAN+Style.BRIGHT}AI Agents :{Style.RESET_ALL}")
+        self.log(f"{Colors.CYAN+Colors.BOLD}AI Agents :{Colors.RESET}")
 
         used_questions_per_agent = {}
 
         for i in range(self.chat_count):
             self.log(
-                f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
-                f"{Fore.GREEN + Style.BRIGHT}Interactions{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {i+1} {Style.RESET_ALL}"
-                f"{Fore.MAGENTA + Style.BRIGHT}Of{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {self.chat_count} {Style.RESET_ALL}                           "
+                f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
+                f"{Colors.GREEN + Colors.BOLD}Interactions{Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD} {i+1} {Colors.RESET}"
+                f"{Colors.MAGENTA + Colors.BOLD}Of{Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD} {self.chat_count} {Colors.RESET}                           "
             )
 
             agent = random.choice(self.agent_lists)
@@ -1287,12 +1341,12 @@ class KiteAi:
             question = random.choice(available_questions)
 
             self.log(
-                f"{Fore.BLUE + Style.BRIGHT}    AI Agent: {Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT}{agent_name}{Style.RESET_ALL}"
+                f"{Colors.BLUE + Colors.BOLD}    AI Agent: {Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD}{agent_name}{Colors.RESET}"
             )
             self.log(
-                f"{Fore.BLUE + Style.BRIGHT}    Question: {Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT}{question}{Style.RESET_ALL}"
+                f"{Colors.BLUE + Colors.BOLD}    Question: {Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD}{question}{Colors.RESET}"
             )
 
             answer = await self.agent_inference(address, service_id, question, use_proxy)
@@ -1300,28 +1354,28 @@ class KiteAi:
                 continue
 
             self.log(
-                f"{Fore.BLUE + Style.BRIGHT}    Answer  : {Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT}{answer.strip()}{Style.RESET_ALL}"
+                f"{Colors.BLUE + Colors.BOLD}    Answer  : {Colors.RESET}"
+                f"{Colors.WHITE + Colors.BOLD}{answer.strip()}{Colors.RESET}"
             )
 
             submit = await self.submit_receipt(address, sa_address, service_id, question, answer, use_proxy)
             if submit:
                 self.log(
-                    f"{Fore.BLUE + Style.BRIGHT}    Status  : {Style.RESET_ALL}"
-                    f"{Fore.GREEN + Style.BRIGHT}Receipt Submited Successfully{Style.RESET_ALL}"
+                    f"{Colors.BLUE + Colors.BOLD}    Status  : {Colors.RESET}"
+                    f"{Colors.GREEN + Colors.BOLD}Receipt Submited Successfully{Colors.RESET}"
                 )
 
             used_questions.add(question)
             await self.print_timer("Interaction")
 
     async def process_option_6(self, account: str, address: str, use_proxy: bool):
-        self.log(f"{Fore.CYAN+Style.BRIGHT}Bridge    :{Style.RESET_ALL}                       ")
+        self.log(f"{Colors.CYAN+Colors.BOLD}Bridge    :{Colors.RESET}                       ")
 
         for i in range(self.bridge_count):
             self.log(
-                f"{Fore.MAGENTA+Style.BRIGHT}   ● {Style.RESET_ALL}"
-                f"{Fore.GREEN+Style.BRIGHT}Bridge{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {i+1} / {self.bridge_count} {Style.RESET_ALL}                           "
+                f"{Colors.MAGENTA+Colors.BOLD}   ● {Colors.RESET}"
+                f"{Colors.GREEN+Colors.BOLD}Bridge{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {i+1} / {self.bridge_count} {Colors.RESET}                           "
             )
 
             bridge_data = self.generate_bridge_option()
@@ -1341,22 +1395,22 @@ class KiteAi:
             balance = await self.get_token_balance(address, rpc_url, src_address, token_type, use_proxy)
 
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Pair    :{Style.RESET_ALL}"
-                f"{Fore.BLUE+Style.BRIGHT} {option} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Pair    :{Colors.RESET}"
+                f"{Colors.BLUE+Colors.BOLD} {option} {Colors.RESET}"
             )
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Balance :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {balance} {src_ticker} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Balance :{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {balance} {src_ticker} {Colors.RESET}"
             )
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}     Amount  :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {amount} {src_ticker} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}     Amount  :{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {amount} {src_ticker} {Colors.RESET}"
             )
 
             if not balance or balance <= amount:
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}     Status  :{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} Insufficient {src_ticker} Token Balance {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}     Status  :{Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} Insufficient {src_ticker} Token Balance {Colors.RESET}"
                 )
                 continue
 
@@ -1367,8 +1421,8 @@ class KiteAi:
         while True:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}Proxy     :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {proxy} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}Proxy     :{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {proxy} {Colors.RESET}"
             )
 
             is_valid = await self.check_connection(proxy)
@@ -1389,8 +1443,8 @@ class KiteAi:
                 self.access_tokens[address] = signin["data"]["access_token"]
 
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                    f"{Fore.GREEN+Style.BRIGHT} Login Success {Style.RESET_ALL}"
+                    f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
+                    f"{Colors.GREEN+Colors.BOLD} Login Success {Colors.RESET}"
                 )
                 return True
 
@@ -1409,19 +1463,19 @@ class KiteAi:
             balance = user.get("data", {}).get("profile", {}).get("total_xp_points", 0)
             
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}Username  :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {username} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}Username  :{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {username} {Colors.RESET}"
             )
             
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}SA Address:{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {self.mask_account(sa_address)} {Style.RESET_ALL}"
+                f"{Colors.CYAN+Colors.BOLD}SA Address:{Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD} {self.mask_account(sa_address)} {Colors.RESET}"
             )
-            self.log(f"{Fore.CYAN+Style.BRIGHT}Balance   :{Style.RESET_ALL}")
+            self.log(f"{Colors.CYAN+Colors.BOLD}Balance   :{Colors.RESET}")
 
             self.log(
-                f"{Fore.MAGENTA+Style.BRIGHT}  ● {Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT}{balance} XP{Style.RESET_ALL}"
+                f"{Colors.MAGENTA+Colors.BOLD}  ● {Colors.RESET}"
+                f"{Colors.WHITE+Colors.BOLD}{balance} XP{Colors.RESET}"
             )
             
             if option == 1:
@@ -1477,7 +1531,7 @@ class KiteAi:
 
             agents = self.load_ai_agents()
             if not agents:
-                self.log(f"{Fore.RED + Style.BRIGHT}No Agents Loaded.{Style.RESET_ALL}")
+                self.log(f"{Colors.RED + Colors.BOLD}No Agents Loaded.{Colors.RESET}")
                 return
             
             self.agent_lists = agents
@@ -1492,8 +1546,8 @@ class KiteAi:
                 self.clear_terminal()
                 self.welcome()
                 self.log(
-                    f"{Fore.GREEN + Style.BRIGHT}Account's Total: {Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT}{len(accounts)}{Style.RESET_ALL}"
+                    f"{Colors.GREEN + Colors.BOLD}Account's Total: {Colors.RESET}"
+                    f"{Colors.WHITE + Colors.BOLD}{len(accounts)}{Colors.RESET}"
                 )
 
                 if use_proxy:
@@ -1504,23 +1558,23 @@ class KiteAi:
                     if account:
                         address = self.generate_address(account)
                         self.log(
-                            f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
-                            f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(address)} {Style.RESET_ALL}"
-                            f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+                            f"{Colors.CYAN + Colors.BOLD}{separator}[{Colors.RESET}"
+                            f"{Colors.WHITE + Colors.BOLD} {self.mask_account(address)} {Colors.RESET}"
+                            f"{Colors.CYAN + Colors.BOLD}]{separator}{Colors.RESET}"
                         )
 
                         if not address:
                             self.log(
-                                f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                                f"{Fore.RED+Style.BRIGHT} Invalid Private Key or Libraries Version Not Supported {Style.RESET_ALL}"
+                                f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
+                                f"{Colors.RED+Colors.BOLD} Invalid Private Key or Libraries Version Not Supported {Colors.RESET}"
                             )
                             continue
                         
                         auth_token = self.generate_auth_token(address)
                         if not auth_token:
                             self.log(
-                                f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                                f"{Fore.RED+Style.BRIGHT} Generate Auth Token Failed, Check Your Cryptography Library {Style.RESET_ALL}                  "
+                                f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
+                                f"{Colors.RED+Colors.BOLD} Generate Auth Token Failed, Check Your Cryptography Library {Colors.RESET}                  "
                             )
                             continue
 
@@ -1553,26 +1607,26 @@ class KiteAi:
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
                         await asyncio.sleep(3)
 
-                self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*72)
+                self.log(f"{Colors.CYAN + Colors.BOLD}={Colors.RESET}"*72)
                 seconds = 24 * 60 * 60
                 while seconds > 0:
                     formatted_time = self.format_seconds(seconds)
                     print(
-                        f"{Fore.CYAN+Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
-                        f"{Fore.WHITE+Style.BRIGHT} {formatted_time} {Style.RESET_ALL}"
-                        f"{Fore.CYAN+Style.BRIGHT}... ]{Style.RESET_ALL}"
-                        f"{Fore.WHITE+Style.BRIGHT} | {Style.RESET_ALL}"
-                        f"{Fore.BLUE+Style.BRIGHT}All Accounts Have Been Processed.{Style.RESET_ALL}",
+                        f"{Colors.CYAN+Colors.BOLD}[ Wait for{Colors.RESET}"
+                        f"{Colors.WHITE+Colors.BOLD} {formatted_time} {Colors.RESET}"
+                        f"{Colors.CYAN+Colors.BOLD}... ]{Colors.RESET}"
+                        f"{Colors.WHITE+Colors.BOLD} | {Colors.RESET}"
+                        f"{Colors.BLUE+Colors.BOLD}All Accounts Have Been Processed.{Colors.RESET}",
                         end="\r"
                     )
                     await asyncio.sleep(1)
                     seconds -= 1
 
         except FileNotFoundError:
-            self.log(f"{Fore.RED}File 'accounts.txt' Not Found.{Style.RESET_ALL}")
+            self.log(f"{Colors.RED}File 'accounts.txt' Not Found.{Colors.RESET}")
             return
         except ( Exception, ValueError ) as e:
-            self.log(f"{Fore.RED+Style.BRIGHT}Error: {e}{Style.RESET_ALL}")
+            self.log(f"{Colors.RED+Colors.BOLD}Error: {e}{Colors.RESET}")
             raise e
 
 if __name__ == "__main__":
@@ -1581,7 +1635,7 @@ if __name__ == "__main__":
         asyncio.run(bot.main())
     except KeyboardInterrupt:
         print(
-            f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
-            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.RED + Style.BRIGHT}[ EXIT ] Kite Ai Ozone - BOT{Style.RESET_ALL}                                       "                              
+            f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Colors.RESET}"
+            f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}"
+            f"{Colors.RED + Colors.BOLD}[ EXIT ] Kite Ai Ozone - BOT{Colors.RESET}                                       "                              
         )
