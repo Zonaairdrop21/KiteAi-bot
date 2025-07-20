@@ -104,7 +104,7 @@ class KiteAi:
         ]''')
         self.ERC20_CONTRACT_ABI = json.loads('''[
             {"type":"function","name":"send","stateMutability":"nonpayable","inputs":[{"name":"_destChainId","type":"uint256"},{"name":"_recipient","type":"address"},{"name":"_amount","type":"uint256"}],"outputs":[]},
-            {"type":"function","name":"balanceOf","stateMutability":"view","inputs":[{"name":"address","type":"address"}],"outputs":[{"name":"","type":"uint256"}]},
+            {"type":"function","name":"balanceOf","stateMutability":"view","inputs":[{"address":"type":"address"}],"outputs":[{"name":"","type":"uint256"}]},
             {"type":"function","name":"allowance","stateMutability":"view","inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}],"outputs":[{"name":"","type":"uint256"}]},
             {"type":"function","name":"approve","stateMutability":"nonpayable","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"name":"","type":"bool"}]},
             {"type":"function","name":"decimals","stateMutability":"view","inputs":[],"outputs":[{"name":"","type":"uint8"}]}
@@ -1054,9 +1054,6 @@ class KiteAi:
         if tx_hash and block_number and amount_to_wei:
             logger.info("Bridge Transaction Success")
             print(f"{Colors.CYAN}↪️ Tx hash {tx_hash} ✅ Explore {explorer}{tx_hash}{Colors.RESET}") # Modified output
-            # Removed: logger.info(f"Block   : {block_number}")
-            # Removed: logger.info(f"Tx Hash : {tx_hash}")
-            # Removed: logger.info(f"Explorer: {explorer}{tx_hash}")
 
             submit = await self.submit_bridge_transfer(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash, use_proxy)
             if submit:
@@ -1342,8 +1339,6 @@ class KiteAi:
                 for account in accounts:
                     if account:
                         address = self.generate_address(account)
-                        # Removed separator line here
-                        # Removed separator line here
 
                         if not address:
                             logger.error("Kunci Privat Tidak Valid atau Versi Library Tidak Didukung.")
@@ -1383,18 +1378,19 @@ class KiteAi:
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
                         await asyncio.sleep(3) # Small delay between accounts
 
-                logger.info("="*72)
+                logger.info("All Task Completed") # Added "All Task Completed" message
                 seconds = 24 * 60 * 60
                 while seconds > 0:
                     formatted_time = self.format_seconds(seconds)
                     current_time_display = datetime.now().strftime("%H:%M:%S")
                     print(
-                        f"{Colors.CYAN+Colors.BOLD}[{current_time_display}]{Colors.RESET}" # Updated time format
+                        f"{Colors.CYAN+Colors.BOLD}[{current_time_display}]{Colors.RESET}"
                         f"{Colors.WHITE+Colors.BOLD} | {Colors.RESET}"
                         f"{Colors.BLUE+Colors.BOLD}Tunggu selama{Colors.RESET}"
                         f"{Colors.WHITE+Colors.BOLD} {formatted_time} {Colors.RESET}"
                         f"{Colors.BLUE+Colors.BOLD}untuk proses berikutnya...{Colors.RESET}",
-                        end="\r"
+                        end="\r",
+                        flush=True # Added flush=True
                     )
                     await asyncio.sleep(1)
                     seconds -= 1
