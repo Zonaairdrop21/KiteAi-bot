@@ -1408,4 +1408,4 @@ if __name__ == "__main__":
         bot = KiteAi()
         asyncio.run(bot.main())
     except KeyboardInterrupt:
-        logger.error("[ EXIT ] KiteAi - BOT")
+        logger.error("[ EXIT ] Kite Ai Ozone - BOT")
