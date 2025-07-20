@@ -15,8 +15,6 @@ from dotenv import load_dotenv
 init(autoreset=True)
 load_dotenv()
 
-wib = pytz.timezone('Asia/Jakarta')
-
 class Colors:
     RESET = Style.RESET_ALL
     BOLD = Style.BRIGHT
@@ -74,6 +72,9 @@ async def display_welcome_screen():
     print("  ╚══════════════════════════════════════╝")
     print(f"{Colors.RESET}")
     await asyncio.sleep(1)
+
+    
+    wib = pytz.timezone('Asia/Jakarta')
 
 class KiteAi:
     def __init__(self) -> None:
