@@ -170,29 +170,31 @@ class KiteAi:
 
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
+        self.proxies = [] # Clear proxies before loading new ones
         try:
-            # Pilihan 1 sekarang adalah Proxyscrape Free Proxy (sebelumnya pilihan 2)
-            if use_proxy_choice == 1: # if use_proxy_choice == 1 (Proxyscrape Free Proxy)
+            if use_proxy_choice == 1: # "Run With Private Proxy"
+                if not os.path.exists(filename):
+                    logger.error(f"File {filename} Not Found.")
+                    return
+                with open(filename, 'r') as f:
+                    self.proxies = [line.strip() for line in f if line.strip()]
+                
+            elif use_proxy_choice == 2: # "Run With Proxyscrape Free Proxy"
                 async with ClientSession(timeout=ClientTimeout(total=30)) as session:
                     async with session.get("https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt") as response:
                         response.raise_for_status()
                         content = await response.text()
-                        with open(filename, 'w') as f:
-                            f.write(content)
                         self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
-            # Pilihan 2 sekarang adalah Tanpa Proxy (sebelumnya pilihan 3)
-            # else: if use_proxy_choice == 2 (Run Without Proxy) - No proxy loading needed
-
-            if not self.proxies and use_proxy_choice == 1: # Check only if proxy was intended to be loaded
-                logger.error("No Proxies Found.")
-                return
-
-            if use_proxy_choice == 1:
+            
+            if self.proxies:
                 logger.info(f"Proxies Total : {len(self.proxies)}")
+            elif use_proxy_choice in [1, 2]: # Only warn if proxy was intended to be loaded
+                logger.warn("No Proxies Loaded.")
 
         except Exception as e:
             logger.error(f"Failed To Load Proxies: {e}")
             self.proxies = []
+
 
     def check_proxy_schemes(self, proxies):
         schemes = ["http://", "https://", "socks4://", "socks5://"]
@@ -222,8 +224,19 @@ class KiteAi:
             return None, None, None
 
         if proxy.startswith("socks"):
-            connector = ProxyConnector.from_url(proxy)
-            return connector, None, None
+            match = re.match(r"(socks[45])://(?:(.*?):?(.*?)@)?(.*)", proxy)
+            if match:
+                proxy_type, username, password, host_port = match.groups()
+                connector = ProxyConnector(
+                    host=host_port.split(':')[0],
+                    port=int(host_port.split(':')[1]),
+                    proxy_type=proxy_type,
+                    username=username if username else None,
+                    password=password if password else None
+                )
+                return connector, None, None
+            else:
+                raise ValueError(f"Invalid SOCKS proxy format: {proxy}")
 
         elif proxy.startswith("http"):
             match = re.match(r"http://(.*?):(.*?)@(.*)", proxy)
@@ -365,10 +378,14 @@ class KiteAi:
     async def get_web3_with_check(self, address: str, rpc_url: str, use_proxy: bool, retries=3, timeout=60):
         request_kwargs = {"timeout": timeout}
 
-        proxy = self.get_next_proxy_for_account(address) if use_proxy else None
+        proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
+        connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
 
-        if use_proxy and proxy:
-            request_kwargs["proxies"] = {"http": proxy, "https": proxy}
+        if connector:
+            request_kwargs["connector"] = connector
+        elif proxy:
+            request_kwargs["proxy"] = proxy
+            request_kwargs["proxy_auth"] = proxy_auth
 
         for attempt in range(retries):
             try:
@@ -628,24 +645,26 @@ class KiteAi:
 
         while True:
             try:
-                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Proxyscrape Free Proxy{Colors.RESET}")
-                print(f"{Colors.WHITE + Colors.BOLD}2. Run Without Proxy{Colors.RESET}")
-                choose = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2] -> {Colors.RESET}").strip())
+                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Private Proxy (from proxy.txt){Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}2. Run With Proxyscrape Free Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}3. Run Without Proxy{Colors.RESET}")
+                choose = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2/3] -> {Colors.RESET}").strip())
 
-                if choose in [1, 2]:
+                if choose in [1, 2, 3]:
                     proxy_type = (
-                        "With Proxyscrape Free" if choose == 1 else
-                        "Without"
+                        "With Private Proxy" if choose == 1 else
+                        "With Proxyscrape Free Proxy" if choose == 2 else
+                        "Without Proxy"
                     )
-                    print(f"{Colors.GREEN + Colors.BOLD}Run {proxy_type} Proxy Selected.{Colors.RESET}")
+                    print(f"{Colors.GREEN + Colors.BOLD}Run {proxy_type} Selected.{Colors.RESET}")
                     break
                 else:
-                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1 or 2.{Colors.RESET}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1, 2, or 3.{Colors.RESET}")
             except ValueError:
-                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1 or 2).{Colors.RESET}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1, 2, or 3).{Colors.RESET}")
 
         rotate = False
-        if choose == 1: # Only ask about rotation if a proxy is chosen
+        if choose in [1, 2]: # Only ask about rotation if a proxy is chosen
             while True:
                 rotate = input(f"{Colors.BLUE + Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip()
 
@@ -708,8 +727,15 @@ class KiteAi:
     async def check_connection(self, proxy_url=None):
         connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
         try:
-            async with ClientSession(connector=connector, timeout=ClientTimeout(total=5)) as session:
-                async with session.get(url="https://api.ipify.org?format=json", proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+            session_kwargs = {"timeout": ClientTimeout(total=5), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
+
+            async with ClientSession(**session_kwargs) as session:
+                async with session.get(url="https://api.ipify.org?format=json") as response:
                     response.raise_for_status()
                     return True
         except (Exception, ClientResponseError) as e:
@@ -730,9 +756,17 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
+
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         result = await response.json()
 
@@ -762,9 +796,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.get(url=url, headers=headers, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.get(url=url, headers=headers) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -788,9 +829,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, json={}, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, json={}) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -815,9 +863,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -839,9 +894,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.get(url=url, headers=headers, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.get(url=url, headers=headers) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -866,9 +928,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -889,9 +958,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.get(url=url, headers=headers, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.get(url=url, headers=headers) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -915,9 +991,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -941,9 +1024,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -967,9 +1057,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         result = ""
 
@@ -1008,9 +1105,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -1033,9 +1137,16 @@ class KiteAi:
         for attempt in range(retries):
             proxy_url = self.get_next_proxy_for_account(address) if use_proxy else None
             connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
+
+            session_kwargs = {"timeout": ClientTimeout(total=60), "ssl": False}
+            if connector:
+                session_kwargs["connector"] = connector
+            elif proxy:
+                session_kwargs["proxy"] = proxy
+                session_kwargs["proxy_auth"] = proxy_auth
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    async with session.post(url=url, headers=headers, data=data, proxy=proxy, proxy_auth=proxy_auth, ssl=False) as response:
+                async with ClientSession(**session_kwargs) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -1054,7 +1165,7 @@ class KiteAi:
 
             submit = await self.submit_bridge_transfer(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash, use_proxy)
             if submit:
-                logger.info("Bridge Transfer Submitted Successfully")
+                logger.success("Bridge Transfer Submitted Successfully")
 
         else:
             logger.error("Perform On-Chain Bridge Failed")
@@ -1144,7 +1255,7 @@ class KiteAi:
 
             agent = random.choice(self.agent_lists)
             agent_name = agent["agentName"]
-            service_id = agent["service_id"] # Corrected key
+            service_id = agent["serviceId"] # Corrected key from service_id to serviceId
             questions = agent["questionLists"]
 
             if agent_name not in used_questions_per_agent:
@@ -1209,24 +1320,29 @@ class KiteAi:
             await self.print_timer("Tx")
 
     async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
-        while True:
+        for _ in range(5): # Limit connection attempts to prevent infinite loops
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-            if use_proxy: # Only print proxy info if proxy is actually being used
+            if use_proxy and proxy:
                 logger.info(f"Proxy     : {proxy}")
+            elif use_proxy and not proxy:
+                logger.warn("No proxy available for this account. Cannot establish connection.")
+                return False
 
-            is_valid = True # Assume valid if no proxy is used
-            if use_proxy:
+            is_valid = True
+            if use_proxy and proxy:
                 is_valid = await self.check_connection(proxy)
 
             if not is_valid:
-                if rotate_proxy:
+                if rotate_proxy and self.proxies: # Ensure there are proxies to rotate
                     proxy = self.rotate_proxy_for_account(address)
                     logger.warn("Rotating proxy due to invalid connection.")
+                    await asyncio.sleep(2) # Small delay before retrying with new proxy
                     continue
                 else:
-                    logger.error("Connection failed and proxy rotation is disabled. Skipping account.")
+                    logger.error("Connection failed and proxy rotation is disabled or no more proxies available. Skipping account.")
                     return False
             return True
+        return False # If all retries fail
 
     async def process_user_signin(self, address: str, use_proxy: bool, rotate_proxy: bool):
         is_connected = await self.process_check_connection(address, use_proxy, rotate_proxy)
@@ -1274,7 +1390,11 @@ class KiteAi:
                 await self.process_option_4(address, use_proxy)
 
             elif option == 5:
-                await self.process_option_5(address, sa_address, use_proxy)
+                # Ensure sa_address is valid before passing to chat
+                if sa_address != "Undefined":
+                    await self.process_option_5(address, sa_address, use_proxy)
+                else:
+                    logger.error("SA Address is undefined. Cannot perform AI Agent Chat.")
 
             elif option == 6:
                 await self.process_option_6(account, address, use_proxy)
@@ -1297,7 +1417,10 @@ class KiteAi:
                     await asyncio.sleep(5)
 
                 if self.auto_chat:
-                    await self.process_option_5(address, sa_address, use_proxy)
+                    if sa_address != "Undefined":
+                        await self.process_option_5(address, sa_address, use_proxy)
+                    else:
+                        logger.error("SA Address is undefined. Cannot perform AI Agent Chat.")
                     await asyncio.sleep(5)
 
                 if self.auto_bridge:
@@ -1313,39 +1436,42 @@ class KiteAi:
             captcha_key = self.load_2captcha_key()
             if captcha_key:
                 self.CAPTCHA_KEY = captcha_key
+            else:
+                logger.warn("2Captcha key not found. Faucet claiming might not work.")
 
             agents = self.load_ai_agents()
             if not agents:
-                logger.error("No Agents Loaded. Exiting.")
-                return
+                logger.error("No Agents Loaded from agents.json. AI Agent Chat will not work.")
+                # Allow the bot to continue for other features
+                self.agent_lists = [] # Ensure it's empty if file not found/empty
+            else:
+                self.agent_lists = agents
 
-            self.agent_lists = agents
-
-            option, use_proxy_choice, rotate_proxy = self.print_question()
+            option, choose_proxy_option, rotate_proxy = self.print_question()
 
             while True:
                 use_proxy = False
-                if use_proxy_choice == 1: # Pilihan 1 sekarang adalah Proxyscrape Free Proxy
+                if choose_proxy_option in [1, 2]: # If Private Proxy or Proxyscrape is chosen
                     use_proxy = True
 
                 self.clear_terminal()
-                await self.welcome() # Changed to await
+                await self.welcome()
                 logger.info(f"Total Akun: {len(accounts)}")
 
-                if use_proxy_choice == 1: # Hanya load proxy jika pilihan 1 (Proxyscrape) dipilih
-                    await self.load_proxies(use_proxy_choice)
+                # Load proxies based on user's choice
+                await self.load_proxies(choose_proxy_option)
 
                 for account in accounts:
                     if account:
                         address = self.generate_address(account)
 
                         if not address:
-                            logger.error("Kunci Privat Tidak Valid atau Versi Library Tidak Didukung.")
+                            logger.error("Kunci Privat Tidak Valid atau Versi Library Tidak Didukung. Skipping account.")
                             continue
 
                         auth_token = self.generate_auth_token(address)
                         if not auth_token:
-                            logger.error("Pembuatan Token Otentikasi Gagal. Periksa Library Kriptografi Anda.")
+                            logger.error("Pembuatan Token Otentikasi Gagal. Periksa Library Kriptografi Anda. Skipping account.")
                             continue
 
                         user_agent = FakeUserAgent().random
