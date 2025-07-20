@@ -1394,7 +1394,6 @@ class KiteAi:
                     )
                     await asyncio.sleep(1)
                     seconds -= 1
-                print(" " * 80, end="\r") # Clear the line after countdown
 
         except FileNotFoundError:
             logger.error("File 'accounts.txt' Tidak Ditemukan.")
