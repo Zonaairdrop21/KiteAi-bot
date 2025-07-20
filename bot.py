@@ -74,8 +74,6 @@ async def display_welcome_screen():
     await asyncio.sleep(1)
 
     
-    wib = pytz.timezone('Asia/Jakarta')
-
 class KiteAi:
     def __init__(self) -> None:
         self.KITE_AI = {
@@ -1146,7 +1144,7 @@ class KiteAi:
 
             agent = random.choice(self.agent_lists)
             agent_name = agent["agentName"]
-            service_id = agent["serviceId"]
+            service_id = agent["service_id"] # Corrected key
             questions = agent["questionLists"]
 
             if agent_name not in used_questions_per_agent:
@@ -1306,6 +1304,8 @@ class KiteAi:
                     await self.process_option_6(account, address, use_proxy)
 
     async def main(self):
+        # Define wib inside the main method or as a class attribute
+        wib = pytz.timezone('Asia/Jakarta') 
         try:
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
