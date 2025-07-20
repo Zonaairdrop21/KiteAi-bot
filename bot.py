@@ -174,13 +174,8 @@ class KiteAi:
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
-            if use_proxy_choice == 1:
-                if not os.path.exists(filename):
-                    logger.error(f"File {filename} Not Found.")
-                    return
-                with open(filename, 'r') as f:
-                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
-            else:
+            # Pilihan 1 sekarang adalah Proxyscrape Free Proxy (sebelumnya pilihan 2)
+            if use_proxy_choice == 1: # if use_proxy_choice == 1 (Proxyscrape Free Proxy)
                 async with ClientSession(timeout=ClientTimeout(total=30)) as session:
                     async with session.get("https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt") as response:
                         response.raise_for_status()
@@ -188,12 +183,15 @@ class KiteAi:
                         with open(filename, 'w') as f:
                             f.write(content)
                         self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
+            # Pilihan 2 sekarang adalah Tanpa Proxy (sebelumnya pilihan 3)
+            # else: if use_proxy_choice == 2 (Run Without Proxy) - No proxy loading needed
             
-            if not self.proxies:
+            if not self.proxies and use_proxy_choice == 1: # Check only if proxy was intended to be loaded
                 logger.error("No Proxies Found.")
                 return
 
-            logger.info(f"Proxies Total : {len(self.proxies)}")
+            if use_proxy_choice == 1:
+                logger.info(f"Proxies Total : {len(self.proxies)}")
         
         except Exception as e:
             logger.error(f"Failed To Load Proxies: {e}")
@@ -323,7 +321,7 @@ class KiteAi:
 
             return payload
         except Exception as e:
-            raise Exception(f"Generate Receipt Payload Failed: {str(e)}")
+            raise Exception(f"Generate Req Payload Failed: {str(e)}")
         
     def generate_bridge_payload(self, address: str, src_chain_id: int, dest_chain_id: int, src_token: str, dest_token: str, amount: int, tx_hash: str):
         try:
@@ -481,8 +479,9 @@ class KiteAi:
         
     async def print_timer(self, type: str):
         for remaining in range(random.randint(5, 10), 0, -1):
+            current_time = datetime.now().strftime("%H:%M:%S")
             print(
-                f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Colors.RESET}"
+                f"{Colors.CYAN + Colors.BOLD}[{current_time}]{Colors.RESET}"
                 f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}"
                 f"{Colors.BLUE + Colors.BOLD}Wait For{Colors.RESET}"
                 f"{Colors.WHITE + Colors.BOLD} {remaining} {Colors.RESET}"
@@ -491,6 +490,7 @@ class KiteAi:
                 flush=True
             )
             await asyncio.sleep(1)
+        print(" " * 80, end="\r") # Clear the line after countdown
 
     def print_chat_question(self):
         while True:
@@ -631,26 +631,24 @@ class KiteAi:
 
         while True:
             try:
-                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Private Proxy{Colors.RESET}")
-                print(f"{Colors.WHITE + Colors.BOLD}2. Run With Proxyscrape Free Proxy{Colors.RESET}")
-                print(f"{Colors.WHITE + Colors.BOLD}3. Run Without Proxy{Colors.RESET}")
-                choose = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2/3] -> {Colors.RESET}").strip())
+                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Proxyscrape Free Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}2. Run Without Proxy{Colors.RESET}")
+                choose = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2] -> {Colors.RESET}").strip())
 
-                if choose in [1, 2, 3]:
+                if choose in [1, 2]:
                     proxy_type = (
-                        "With Private" if choose == 1 else 
-                        "With Proxyscrape Free" if choose == 2 else 
+                        "With Proxyscrape Free" if choose == 1 else 
                         "Without"
                     )
                     print(f"{Colors.GREEN + Colors.BOLD}Run {proxy_type} Proxy Selected.{Colors.RESET}")
                     break
                 else:
-                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1, 2 or 3.{Colors.RESET}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1 or 2.{Colors.RESET}")
             except ValueError:
-                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1, 2 or 3).{Colors.RESET}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1 or 2).{Colors.RESET}")
 
         rotate = False
-        if choose in [1, 2]:
+        if choose == 1: # Only ask about rotation if a proxy is chosen
             while True:
                 rotate = input(f"{Colors.BLUE + Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip()
 
@@ -1055,9 +1053,10 @@ class KiteAi:
         tx_hash, block_number, amount_to_wei = await self.perform_bridge(account, address, rpc_url, dest_chain_id, src_address, amount, token_type, use_proxy)
         if tx_hash and block_number and amount_to_wei:
             logger.info("Bridge Transaction Success")
-            logger.info(f"Block   : {block_number}")
-            logger.info(f"Tx Hash : {tx_hash}")
-            logger.info(f"Explorer: {explorer}{tx_hash}")
+            print(f"{Colors.CYAN}↪️ Tx hash {tx_hash} ✅ Explore {explorer}{tx_hash}{Colors.RESET}") # Modified output
+            # Removed: logger.info(f"Block   : {block_number}")
+            # Removed: logger.info(f"Tx Hash : {tx_hash}")
+            # Removed: logger.info(f"Explorer: {explorer}{tx_hash}")
 
             submit = await self.submit_bridge_transfer(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash, use_proxy)
             if submit:
@@ -1218,9 +1217,13 @@ class KiteAi:
     async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
         while True:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-            logger.info(f"Proxy     : {proxy}")
+            if use_proxy: # Only print proxy info if proxy is actually being used
+                logger.info(f"Proxy     : {proxy}")
 
-            is_valid = await self.check_connection(proxy)
+            is_valid = True # Assume valid if no proxy is used
+            if use_proxy:
+                is_valid = await self.check_connection(proxy)
+            
             if not is_valid:
                 if rotate_proxy:
                     proxy = self.rotate_proxy_for_account(address)
@@ -1246,6 +1249,9 @@ class KiteAi:
             return False
         
     async def process_accounts(self, account: str, address: str, option: int, use_proxy: bool, rotate_proxy: bool):
+        # Print masked address at the beginning of processing each account
+        logger.info(f"Memproses akun: {self.mask_account(address)}")
+
         signed = await self.process_user_signin(address, use_proxy, rotate_proxy)
         if signed:
             user = await self.user_data(address, use_proxy)
@@ -1323,29 +1329,29 @@ class KiteAi:
 
             while True:
                 use_proxy = False
-                if use_proxy_choice in [1, 2]:
+                if use_proxy_choice == 1: # Pilihan 1 sekarang adalah Proxyscrape Free Proxy
                     use_proxy = True
 
                 self.clear_terminal()
                 await self.welcome() # Changed to await
-                logger.info(f"Account's Total: {len(accounts)}")
+                logger.info(f"Total Akun: {len(accounts)}")
 
-                if use_proxy:
+                if use_proxy_choice == 1: # Hanya load proxy jika pilihan 1 (Proxyscrape) dipilih
                     await self.load_proxies(use_proxy_choice)
                 
-                separator = "=" * 25
                 for account in accounts:
                     if account:
                         address = self.generate_address(account)
-                        logger.info(f"{separator}[ {self.mask_account(address)} ]{separator}")
+                        # Removed separator line here
+                        # Removed separator line here
 
                         if not address:
-                            logger.error("Invalid Private Key or Libraries Version Not Supported.")
+                            logger.error("Kunci Privat Tidak Valid atau Versi Library Tidak Didukung.")
                             continue
                         
                         auth_token = self.generate_auth_token(address)
                         if not auth_token:
-                            logger.error("Generate Auth Token Failed. Check Your Cryptography Library.")
+                            logger.error("Pembuatan Token Otentikasi Gagal. Periksa Library Kriptografi Anda.")
                             continue
 
                         user_agent = FakeUserAgent().random
@@ -1375,28 +1381,30 @@ class KiteAi:
                         self.auth_tokens[address] = auth_token
                         
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
-                        await asyncio.sleep(3)
+                        await asyncio.sleep(3) # Small delay between accounts
 
                 logger.info("="*72)
                 seconds = 24 * 60 * 60
                 while seconds > 0:
                     formatted_time = self.format_seconds(seconds)
+                    current_time_display = datetime.now().strftime("%H:%M:%S")
                     print(
-                        f"{Colors.CYAN+Colors.BOLD}[ Wait for{Colors.RESET}"
-                        f"{Colors.WHITE+Colors.BOLD} {formatted_time} {Colors.RESET}"
-                        f"{Colors.CYAN+Colors.BOLD}... ]{Colors.RESET}"
+                        f"{Colors.CYAN+Colors.BOLD}[{current_time_display}]{Colors.RESET}" # Updated time format
                         f"{Colors.WHITE+Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.BLUE+Colors.BOLD}All Accounts Have Been Processed.{Colors.RESET}",
+                        f"{Colors.BLUE+Colors.BOLD}Tunggu selama{Colors.RESET}"
+                        f"{Colors.WHITE+Colors.BOLD} {formatted_time} {Colors.RESET}"
+                        f"{Colors.BLUE+Colors.BOLD}untuk proses berikutnya...{Colors.RESET}",
                         end="\r"
                     )
                     await asyncio.sleep(1)
                     seconds -= 1
+                print(" " * 80, end="\r") # Clear the line after countdown
 
         except FileNotFoundError:
-            logger.error("File 'accounts.txt' Not Found.")
+            logger.error("File 'accounts.txt' Tidak Ditemukan.")
             return
         except Exception as e:
-            logger.error(f"An unexpected error occurred: {e}")
+            logger.error(f"Terjadi kesalahan tak terduga: {e}")
             # Do not re-raise the exception if you want the bot to continue or handle it gracefully
             # raise e
 
@@ -1406,7 +1414,7 @@ if __name__ == "__main__":
         asyncio.run(bot.main())
     except KeyboardInterrupt:
         print(
-            f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Colors.RESET}"
+            f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%H:%M:%S')} ]{Colors.RESET}" # Updated time format for exit
             f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}"
             f"{Colors.RED + Colors.BOLD}[ EXIT ] Kite Ai Ozone - BOT{Colors.RESET}                                       "                              
         )
