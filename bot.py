@@ -104,7 +104,7 @@ class KiteAi:
         ]''')
         self.ERC20_CONTRACT_ABI = json.loads('''[
             {"type":"function","name":"send","stateMutability":"nonpayable","inputs":[{"name":"_destChainId","type":"uint256"},{"name":"_recipient","type":"address"},{"name":"_amount","type":"uint256"}],"outputs":[]},
-            {"type":"function","name":"balanceOf","stateMutability":"view","inputs":[{"address":"type":"address"}],"outputs":[{"name":"","type":"uint256"}]},
+            {"type":"function","name":"balanceOf","stateMutability":"view","inputs":[{"name":"address","type":"address"}],"outputs":[{"name":"","type":"uint256"}]},
             {"type":"function","name":"allowance","stateMutability":"view","inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}],"outputs":[{"name":"","type":"uint256"}]},
             {"type":"function","name":"approve","stateMutability":"nonpayable","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"name":"","type":"bool"}]},
             {"type":"function","name":"decimals","stateMutability":"view","inputs":[],"outputs":[{"name":"","type":"uint8"}]}
@@ -146,7 +146,7 @@ class KiteAi:
         hours, remainder = divmod(seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-    
+
     def load_2captcha_key(self):
         try:
             with open("2captcha_key.txt", 'r') as file:
@@ -154,7 +154,7 @@ class KiteAi:
             return captcha_key
         except Exception as e:
             return None
-    
+
     def load_ai_agents(self):
         filename = "agents.json"
         try:
@@ -170,7 +170,7 @@ class KiteAi:
         except json.JSONDecodeError:
             logger.error(f"Error decoding JSON from {filename}.")
             return []
-    
+
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
@@ -185,14 +185,14 @@ class KiteAi:
                         self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
             # Pilihan 2 sekarang adalah Tanpa Proxy (sebelumnya pilihan 3)
             # else: if use_proxy_choice == 2 (Run Without Proxy) - No proxy loading needed
-            
+
             if not self.proxies and use_proxy_choice == 1: # Check only if proxy was intended to be loaded
                 logger.error("No Proxies Found.")
                 return
 
             if use_proxy_choice == 1:
                 logger.info(f"Proxies Total : {len(self.proxies)}")
-        
+
         except Exception as e:
             logger.error(f"Failed To Load Proxies: {e}")
             self.proxies = []
@@ -219,7 +219,7 @@ class KiteAi:
         self.account_proxies[account] = proxy
         self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
         return proxy
-    
+
     def build_proxy_config(self, proxy=None):
         if not proxy:
             return None, None, None
@@ -239,7 +239,7 @@ class KiteAi:
                 return None, proxy, None
 
         raise Exception("Unsupported Proxy Type.")
-    
+
     def generate_address(self, account: str):
         try:
             account = Account.from_key(account)
@@ -248,7 +248,7 @@ class KiteAi:
         except Exception as e:
             logger.error(f"Error generating address: {e}")
             return None
-        
+
     def mask_account(self, account):
         try:
             mask_account = account[:6] + '*' * 6 + account[-6:]
@@ -256,7 +256,7 @@ class KiteAi:
         except Exception as e:
             logger.error(f"Error masking account: {e}")
             return None
-        
+
     def generate_auth_token(self, address):
         try:
             key_hex = "6a1c35292b7c5b769ff47d89a17e7bc4f0adfe1b462981d28e0e9f7ff20b8f8a"
@@ -276,11 +276,11 @@ class KiteAi:
         except Exception as e:
             logger.error(f"Error generating auth token: {e}")
             return None
-    
+
     def generate_quiz_title(self):
         today = datetime.today().strftime('%Y-%m-%d')
         return f"daily_quiz_{today}"
-        
+
     def setup_ai_agent(self, agents: list):
         agent = random.choice(agents)
 
@@ -289,7 +289,7 @@ class KiteAi:
         question = random.choice(agent["questionLists"])
 
         return agent_name, service_id, question
-        
+
     def generate_inference_payload(self, service_id: str, question: str):
         try:
             payload = {
@@ -305,7 +305,7 @@ class KiteAi:
             return payload
         except Exception as e:
             raise Exception(f"Generate Inference Payload Failed: {str(e)}")
-        
+
     def generate_receipt_payload(self, address: str, service_id: str, question: str, answer: str):
         try:
             payload = {
@@ -322,7 +322,7 @@ class KiteAi:
             return payload
         except Exception as e:
             raise Exception(f"Generate Req Payload Failed: {str(e)}")
-        
+
     def generate_bridge_payload(self, address: str, src_chain_id: int, dest_chain_id: int, src_token: str, dest_token: str, amount: int, tx_hash: str):
         try:
             now_utc = datetime.now(timezone.utc)
@@ -343,7 +343,7 @@ class KiteAi:
             return payload
         except Exception as e:
             raise Exception(f"Generate Req Payload Failed: {str(e)}")
-        
+
     def generate_bridge_option(self):
         src_chain, dest_chain = random.choice([
             (self.KITE_AI, self.BASE_SEPOLIA),
@@ -364,7 +364,7 @@ class KiteAi:
             "src_token": src_token,
             "dest_token": dest_token
         }
-    
+
     async def get_web3_with_check(self, address: str, rpc_url: str, use_proxy: bool, retries=3, timeout=60):
         request_kwargs = {"timeout": timeout}
 
@@ -383,7 +383,7 @@ class KiteAi:
                     await asyncio.sleep(3)
                     continue
                 raise Exception(f"Failed to Connect to RPC: {str(e)}")
-        
+
     async def get_token_balance(self, address: str, rpc_url: str, contract_address: str, token_type: str, use_proxy: bool):
         try:
             web3 = await self.get_web3_with_check(address, rpc_url, use_proxy)
@@ -405,7 +405,7 @@ class KiteAi:
         except Exception as e:
             logger.error(f"Get token balance failed: {str(e)}")
             return None
-        
+
     async def send_raw_transaction_with_retries(self, account, web3, tx, retries=5):
         for attempt in range(retries):
             try:
@@ -431,7 +431,7 @@ class KiteAi:
                 pass
             await asyncio.sleep(2 ** attempt)
         raise Exception("Transaction Receipt Not Found After Maximum Retries")
-        
+
     async def perform_bridge(self, account: str, address: str, rpc_url: str, dest_chain_id: int, src_address: str, amount: float, token_type: str, use_proxy: bool):
         try:
             web3 = await self.get_web3_with_check(address, rpc_url, use_proxy)
@@ -476,7 +476,7 @@ class KiteAi:
         except Exception as e:
             logger.error(f"Perform bridge failed: {str(e)}")
             return None, None, None
-        
+
     async def print_timer(self, type: str):
         for remaining in range(random.randint(5, 10), 0, -1):
             current_time = datetime.now().strftime("%H:%M:%S")
@@ -537,7 +537,7 @@ class KiteAi:
                     print(f"{Colors.RED + Colors.BOLD}Amount must be >= Min Bridge Amount.{Colors.RESET}")
             except ValueError:
                 print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
-        
+
     def print_question(self):
         while True:
             try:
@@ -553,12 +553,12 @@ class KiteAi:
 
                 if option in [1, 2, 3, 4, 5, 6, 7]:
                     option_type = (
-                        "Claim Faucet" if option == 1 else 
-                        "Daily Quiz" if option == 2 else 
-                        "Stake Token" if option == 3 else 
-                        "Unstake Token" if option == 4 else 
-                        "AI Agent Chat" if option == 5 else 
-                        "Random Bridge" if option == 6 else 
+                        "Claim Faucet" if option == 1 else
+                        "Daily Quiz" if option == 2 else
+                        "Stake Token" if option == 3 else
+                        "Unstake Token" if option == 4 else
+                        "AI Agent Chat" if option == 5 else
+                        "Random Bridge" if option == 6 else
                         "Run All Features"
                     )
                     print(f"{Colors.GREEN + Colors.BOLD}{option_type} Selected.{Colors.RESET}")
@@ -622,7 +622,7 @@ class KiteAi:
                 auto_bridge = input(f"{Colors.YELLOW + Colors.BOLD}Auto Perform Random Bridge? [y/n] -> {Colors.RESET}").strip()
                 if auto_bridge in ["y", "n"]:
                     self.auto_bridge = auto_bridge == "y"
-                    
+
                     if self.auto_bridge:
                         self.print_bridge_question()
                     break
@@ -637,7 +637,7 @@ class KiteAi:
 
                 if choose in [1, 2]:
                     proxy_type = (
-                        "With Proxyscrape Free" if choose == 1 else 
+                        "With Proxyscrape Free" if choose == 1 else
                         "Without"
                     )
                     print(f"{Colors.GREEN + Colors.BOLD}Run {proxy_type} Proxy Selected.{Colors.RESET}")
@@ -659,12 +659,12 @@ class KiteAi:
                     print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter 'y' or 'n'.{Colors.RESET}")
 
         return option, choose, rotate
-    
+
     async def solve_recaptcha(self, retries=5):
         for attempt in range(retries):
             try:
                 async with ClientSession(timeout=ClientTimeout(total=60)) as session:
-                    
+
                     if self.CAPTCHA_KEY is None:
                         logger.warn("2Captcha Key Is None")
                         return None
@@ -707,7 +707,7 @@ class KiteAi:
                 logger.error(f"Recaptcha Unsolved - {str(e)}")
                 return None
         return None
-    
+
     async def check_connection(self, proxy_url=None):
         connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
         try:
@@ -717,9 +717,9 @@ class KiteAi:
                     return True
         except (Exception, ClientResponseError) as e:
             logger.error(f"Connection Not OK - {str(e)}")
-        
+
         return False
-    
+
     async def user_signin(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.NEO_API}/signin"
         data = json.dumps({"eoa":address})
@@ -752,9 +752,9 @@ class KiteAi:
                     await asyncio.sleep(5)
                     continue
                 logger.error(f"Login Failed - {str(e)}")
-        
+
         return None
-    
+
     async def user_data(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/me"
         headers = {
@@ -777,7 +777,7 @@ class KiteAi:
                 logger.error(f"Fetch User Data Failed - {str(e)}")
 
         return None
-    
+
     async def claim_faucet(self, address: str, recaptcha_token: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/blockchain/faucet-transfer"
         headers = {
@@ -803,7 +803,7 @@ class KiteAi:
                 logger.error(f"Faucet Not Claimed - {str(e)}")
 
         return None
-        
+
     async def create_quiz(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.NEO_API}/quiz/create"
         data = json.dumps({"title":self.generate_quiz_title(), "num":1, "eoa":address})
@@ -830,7 +830,7 @@ class KiteAi:
                 logger.error(f"Daily Quiz GET Id Failed - {str(e)}")
 
         return None
-        
+
     async def get_quiz(self, address: str, quiz_id: int, use_proxy: bool, retries=5):
         url = f"{self.NEO_API}/quiz/get?id={quiz_id}&eoa={address}"
         headers = {
@@ -854,7 +854,7 @@ class KiteAi:
                 logger.error(f"GET Question & Answer Failed - {str(e)}")
 
         return None
-            
+
     async def submit_quiz(self, address: str, quiz_id: int, question_id: int, quiz_answer: str, use_proxy: bool, retries=5):
         url = f"{self.NEO_API}/quiz/submit"
         data = json.dumps({"quiz_id":quiz_id, "question_id":question_id, "answer":quiz_answer, "finish":True, "eoa":address})
@@ -881,7 +881,7 @@ class KiteAi:
                 logger.error(f"Submit Answer Failed - {str(e)}")
 
         return None
-            
+
     async def token_balance(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/me/balance"
         headers = {
@@ -904,7 +904,7 @@ class KiteAi:
                 logger.error(f"GET Balance Failed - {str(e)}")
 
         return None
-            
+
     async def stake_token(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/subnet/delegate"
         data = json.dumps({"subnet_address":self.KITE_AI_SUBNET, "amount":1})
@@ -930,7 +930,7 @@ class KiteAi:
                 logger.error(f"Stake Failed - {str(e)}")
 
         return None
-            
+
     async def claim_stake_rewards(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/subnet/claim-rewards"
         data = json.dumps({"subnet_address":self.KITE_AI_SUBNET})
@@ -956,7 +956,7 @@ class KiteAi:
                 logger.error(f"Unstake Failed - {str(e)}")
 
         return None
-            
+
     async def agent_inference(self, address: str, service_id: str, question: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/agent/inference"
         data = json.dumps(self.generate_inference_payload(service_id, question))
@@ -996,7 +996,7 @@ class KiteAi:
                 logger.error(f"Agents Didn't Respond - {str(e)}")
 
         return None
-            
+
     async def submit_receipt(self, address: str, sa_address: str, service_id: str, question: str, answer: str, use_proxy: bool, retries=5):
         url = f"{self.NEO_API}/submit_receipt"
         data = json.dumps(self.generate_receipt_payload(sa_address, service_id, question, answer))
@@ -1023,7 +1023,7 @@ class KiteAi:
                 logger.error(f"Submit Receipt Failed - {str(e)}")
 
         return None
-    
+
     async def submit_bridge_transfer(self, address: str, src_chain_id: int, dest_chain_id: int, src_address: str, dest_address: str, amount_to_wei: int, tx_hash: str, use_proxy: bool, retries=5):
         url = f"{self.BRIDGE_API}/bridge-transfer"
         data = json.dumps(self.generate_bridge_payload(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash))
@@ -1048,7 +1048,7 @@ class KiteAi:
                 logger.error(f"Submit Bridge Transfer Failed - {str(e)}")
 
         return None
-    
+
     async def process_perform_bridge(self, account: str, address: str, rpc_url: str, src_chain_id: int, dest_chain_id: int, src_address: str, dest_address: str, amount: float, token_type: str, explorer: str, use_proxy: bool):
         tx_hash, block_number, amount_to_wei = await self.perform_bridge(account, address, rpc_url, dest_chain_id, src_address, amount, token_type, use_proxy)
         if tx_hash and block_number and amount_to_wei:
@@ -1220,7 +1220,7 @@ class KiteAi:
             is_valid = True # Assume valid if no proxy is used
             if use_proxy:
                 is_valid = await self.check_connection(proxy)
-            
+
             if not is_valid:
                 if rotate_proxy:
                     proxy = self.rotate_proxy_for_account(address)
@@ -1230,7 +1230,7 @@ class KiteAi:
                     logger.error("Connection failed and proxy rotation is disabled. Skipping account.")
                     return False
             return True
-        
+
     async def process_user_signin(self, address: str, use_proxy: bool, rotate_proxy: bool):
         is_connected = await self.process_check_connection(address, use_proxy, rotate_proxy)
         if is_connected:
@@ -1244,7 +1244,7 @@ class KiteAi:
                 return False
         else:
             return False
-        
+
     async def process_accounts(self, account: str, address: str, option: int, use_proxy: bool, rotate_proxy: bool):
         # Print masked address at the beginning of processing each account
         logger.info(f"Memproses akun: {self.mask_account(address)}")
@@ -1255,15 +1255,15 @@ class KiteAi:
             if not user:
                 logger.error("Failed to fetch user data. Skipping account.")
                 return
-            
+
             username = user.get("data", {}).get("profile", {}).get("username", "Unknown")
             sa_address = user.get("data", {}).get("profile", {}).get("smart_account_address", "Undefined")
             balance = user.get("data", {}).get("profile", {}).get("total_xp_points", 0)
-            
+
             logger.info(f"Username  : {username}")
             logger.info(f"SA Address: {self.mask_account(sa_address)}")
             logger.info(f"Balance   : {balance} XP")
-            
+
             if option == 1:
                 await self.process_option_1(address, user, use_proxy)
 
@@ -1319,9 +1319,9 @@ class KiteAi:
             if not agents:
                 logger.error("No Agents Loaded. Exiting.")
                 return
-            
+
             self.agent_lists = agents
-            
+
             option, use_proxy_choice, rotate_proxy = self.print_question()
 
             while True:
@@ -1335,7 +1335,7 @@ class KiteAi:
 
                 if use_proxy_choice == 1: # Hanya load proxy jika pilihan 1 (Proxyscrape) dipilih
                     await self.load_proxies(use_proxy_choice)
-                
+
                 for account in accounts:
                     if account:
                         address = self.generate_address(account)
@@ -1343,7 +1343,7 @@ class KiteAi:
                         if not address:
                             logger.error("Kunci Privat Tidak Valid atau Versi Library Tidak Didukung.")
                             continue
-                        
+
                         auth_token = self.generate_auth_token(address)
                         if not auth_token:
                             logger.error("Pembuatan Token Otentikasi Gagal. Periksa Library Kriptografi Anda.")
@@ -1372,9 +1372,9 @@ class KiteAi:
                             "Sec-Fetch-Site": "same-site",
                             "User-Agent": user_agent
                         }
-                        
+
                         self.auth_tokens[address] = auth_token
-                        
+
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
                         await asyncio.sleep(3) # Small delay between accounts
 
@@ -1412,5 +1412,5 @@ if __name__ == "__main__":
         print(
             f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%H:%M:%S')} ]{Colors.RESET}" # Updated time format for exit
             f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}"
-            f"{Colors.RED + Colors.BOLD}[ EXIT ] Kite Ai Ozone - BOT{Colors.RESET}                                       "                              
+            f"{Colors.RED + Colors.BOLD}[ EXIT ] Kite Ai Ozone - BOT{Colors.RESET}                                       "
         )
