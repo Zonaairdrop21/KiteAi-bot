@@ -8,7 +8,7 @@ from aiohttp_socks import ProxyConnector
 from fake_useragent import FakeUserAgent
 from http.cookies import SimpleCookie
 from datetime import datetime, timezone
-from colorama import *
+from colorama import Fore, Style, init
 import asyncio, binascii, random, json, re, os, pytz
 from dotenv import load_dotenv
 
@@ -28,6 +28,7 @@ class Colors:
     CYAN = Fore.CYAN
     MAGENTA = Fore.MAGENTA
     WHITE = Fore.WHITE
+    BLUE = Fore.BLUE
     BRIGHT_GREEN = Fore.LIGHTGREEN_EX
     BRIGHT_MAGENTA = Fore.LIGHTMAGENTA_EX
     BRIGHT_WHITE = Fore.LIGHTWHITE_EX
@@ -52,9 +53,9 @@ class Logger:
     @staticmethod
     def step(msg): Logger.log("STEP", "➤", msg, Colors.WHITE)
     @staticmethod
-    def swap(msg): Logger.log("SWAP", "↪️", msg, Colors.CYAN)
+    def action(msg): Logger.log("ACTION", "↪️", msg, Colors.CYAN)
     @staticmethod
-    def swapSuccess(msg): Logger.log("SWAP", "✅", msg, Colors.GREEN)
+    def actionSuccess(msg): Logger.log("ACTION", "✅", msg, Colors.GREEN)
 
 logger = Logger()
 
@@ -133,6 +134,7 @@ class KiteAi:
         self.bridge_count = 0
         self.min_bridge_amount = 0
         self.max_bridge_amount = 0
+        self.agent_lists = []
 
     def clear_terminal(self):
         clear_console()
@@ -165,7 +167,7 @@ class KiteAi:
         try:
             if not os.path.exists(filename):
                 self.log(f"{Colors.RED}File {filename} Not Found.{Colors.RESET}")
-                return
+                return []
 
             with open(filename, 'r') as file:
                 data = json.load(file)
@@ -385,7 +387,7 @@ class KiteAi:
                 web3.eth.get_block_number()
                 return web3
             except Exception as e:
-                if attempt < retries:
+                if attempt < retries - 1:
                     await asyncio.sleep(3)
                     continue
                 raise Exception(f"Failed to Connect to RPC: {str(e)}")
@@ -1282,7 +1284,7 @@ class KiteAi:
     async def process_option_3(self, address: str, use_proxy: bool):
         balance = await self.token_balance(address, use_proxy)
         if balance:
-            kite_balance = balance.get("data", ).get("balances", {}).get("kite", 0)
+            kite_balance = balance.get("data", {}).get("balances", {}).get("kite", 0)
 
             if kite_balance >= 1:
                 stake = await self.stake_token(address, use_proxy)
@@ -1298,7 +1300,7 @@ class KiteAi:
             else:
                 self.log(
                     f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} Insufficinet Kite Token Balance {Colors.RESET}"
+                    f"{Colors.YELLOW+Colors.BOLD} Insufficient Kite Token Balance {Colors.RESET}"
                 )
 
     async def process_option_4(self, address: str, use_proxy: bool):
@@ -1337,6 +1339,9 @@ class KiteAi:
 
             used_questions = used_questions_per_agent[agent_name]
             available_questions = [q for q in questions if q not in used_questions]
+
+            if not available_questions:
+                continue
 
             question = random.choice(available_questions)
 
@@ -1389,7 +1394,6 @@ class KiteAi:
             src_address = bridge_data["src_token"]["address"]
             dest_address = bridge_data["dest_token"]["address"]
 
-
             amount = round(random.uniform(self.min_bridge_amount, self.max_bridge_amount), 6)
 
             balance = await self.get_token_balance(address, rpc_url, src_address, token_type, use_proxy)
@@ -1429,9 +1433,9 @@ class KiteAi:
             if not is_valid:
                 if rotate_proxy:
                     proxy = self.rotate_proxy_for_account(address)
-
-                continue
-
+                    continue
+                else:
+                    return False
             return True
         
     async def process_user_signin(self, address: str, use_proxy: bool, rotate_proxy: bool):
@@ -1459,7 +1463,7 @@ class KiteAi:
                 return
             
             username = user.get("data", {}).get("profile", {}).get("username", "Unknown")
-            sa_address = user.get("data", {}).get("profile", {}).get("smart_account_address", "Undifined")
+            sa_address = user.get("data", {}).get("profile", {}).get("smart_account_address", "Undefined")
             balance = user.get("data", {}).get("profile", {}).get("total_xp_points", 0)
             
             self.log(
