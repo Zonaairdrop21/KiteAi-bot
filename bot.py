@@ -1397,18 +1397,15 @@ class KiteAi:
                     seconds -= 1
 
         except FileNotFoundError:
-            logger.error("File 'accounts.txt' Tidak Ditemukan.")
+            logger.error(f"File 'accounts.txt' Not Found.")
             return
         except Exception as e:
-            logger.error(f"Terjadi kesalahan tak terduga: {e}")
+            logger.error(f"Error: {e}")
+            raise e
 
 if __name__ == "__main__":
     try:
         bot = KiteAi()
         asyncio.run(bot.main())
     except KeyboardInterrupt:
-        print(
-            f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%H:%M:%S')} ]{Colors.RESET}" # Updated time format for exit
-            f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}"
-            f"{Colors.RED + Colors.BOLD}[ EXIT ] Kite Ai Ozone - BOT{Colors.RESET}                                       "
-        )
+        logger.error("[ EXIT ] KiteAi - BOT")
