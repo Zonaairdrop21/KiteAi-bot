@@ -171,20 +171,15 @@ class KiteAi:
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
-            # Pilihan 1 sekarang adalah Proxyscrape Free Proxy (sebelumnya pilihan 2)
-            if use_proxy_choice == 1: # if use_proxy_choice == 1 (Proxyscrape Free Proxy)
-                async with ClientSession(timeout=ClientTimeout(total=30)) as session:
-                    async with session.get("https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt") as response:
-                        response.raise_for_status()
-                        content = await response.text()
-                        with open(filename, 'w') as f:
-                            f.write(content)
-                        self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
-            # Pilihan 2 sekarang adalah Tanpa Proxy (sebelumnya pilihan 3)
-            # else: if use_proxy_choice == 2 (Run Without Proxy) - No proxy loading needed
-
+            if use_proxy_choice == 1: # Run With Private Proxy (from proxy.txt)
+                if not os.path.exists(filename):
+                    logger.error(f"File {filename} Not Found for Private Proxies.")
+                    return []
+                with open(filename, 'r') as f:
+                    self.proxies = [line.strip() for line in f if line.strip()]
+            
             if not self.proxies and use_proxy_choice == 1: # Check only if proxy was intended to be loaded
-                logger.error("No Proxies Found.")
+                logger.error("No Proxies Found in proxy.txt.")
                 return
 
             if use_proxy_choice == 1:
@@ -368,7 +363,13 @@ class KiteAi:
         proxy = self.get_next_proxy_for_account(address) if use_proxy else None
 
         if use_proxy and proxy:
-            request_kwargs["proxies"] = {"http": proxy, "https": proxy}
+            connector, http_proxy, http_proxy_auth = self.build_proxy_config(proxy)
+            if connector:
+                request_kwargs["connector"] = connector
+            else:
+                request_kwargs["proxy"] = http_proxy
+                if http_proxy_auth:
+                    request_kwargs["proxy_auth"] = http_proxy_auth
 
         for attempt in range(retries):
             try:
@@ -628,13 +629,13 @@ class KiteAi:
 
         while True:
             try:
-                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Proxyscrape Free Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}1. Run With Private Proxy (from proxy.txt){Colors.RESET}")
                 print(f"{Colors.WHITE + Colors.BOLD}2. Run Without Proxy{Colors.RESET}")
                 choose = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2] -> {Colors.RESET}").strip())
 
                 if choose in [1, 2]:
                     proxy_type = (
-                        "With Proxyscrape Free" if choose == 1 else
+                        "With Private Proxy" if choose == 1 else
                         "Without"
                     )
                     print(f"{Colors.GREEN + Colors.BOLD}Run {proxy_type} Proxy Selected.{Colors.RESET}")
@@ -645,7 +646,7 @@ class KiteAi:
                 print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1 or 2).{Colors.RESET}")
 
         rotate = False
-        if choose == 1: # Only ask about rotation if a proxy is chosen
+        if choose == 1: # Only ask about rotation if a proxy is chosen (now Private Proxy)
             while True:
                 rotate = input(f"{Colors.BLUE + Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip()
 
@@ -1144,7 +1145,7 @@ class KiteAi:
 
             agent = random.choice(self.agent_lists)
             agent_name = agent["agentName"]
-            service_id = agent["service_id"] # Corrected key
+            service_id = agent["serviceId"] # Corrected key from 'service_id' to 'serviceId'
             questions = agent["questionLists"]
 
             if agent_name not in used_questions_per_agent:
@@ -1325,14 +1326,14 @@ class KiteAi:
 
             while True:
                 use_proxy = False
-                if use_proxy_choice == 1: # Pilihan 1 sekarang adalah Proxyscrape Free Proxy
+                if use_proxy_choice == 1: # Pilihan 1 sekarang adalah Private Proxy
                     use_proxy = True
 
                 self.clear_terminal()
                 await self.welcome() # Changed to await
                 logger.info(f"Total Akun: {len(accounts)}")
 
-                if use_proxy_choice == 1: # Hanya load proxy jika pilihan 1 (Proxyscrape) dipilih
+                if use_proxy_choice == 1: # Hanya load proxy jika pilihan 1 (Private Proxy) dipilih
                     await self.load_proxies(use_proxy_choice)
 
                 for account in accounts:
