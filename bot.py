@@ -12,13 +12,11 @@ from colorama import Fore, Style, init
 import asyncio, binascii, random, json, re, os, pytz
 from dotenv import load_dotenv
 
-# Initialize colorama and load environment variables
 init(autoreset=True)
 load_dotenv()
 
 wib = pytz.timezone('Asia/Jakarta')
 
-# === Terminal Color Setup ===
 class Colors:
     RESET = Style.RESET_ALL
     BOLD = Style.BRIGHT
@@ -1378,19 +1376,21 @@ class KiteAi:
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
                         await asyncio.sleep(3) # Small delay between accounts
 
-                logger.info("All Task Completed") # Added "All Task Completed" message
                 seconds = 24 * 60 * 60
-                while seconds > 0:
+                start_time_str = datetime.now(wib).strftime('%H:%M:%S')
+
+                print(f"{Colors.BRIGHT_BLACK}[{start_time_str}]{Colors.RESET} {Colors.GREEN}[✓] 23:59:59 All Task Completeed 🗿", end="\r", flush=True)
+                await asyncio.sleep(1)
+
+                seconds -= 1
+
+                while seconds >= 0:
                     formatted_time = self.format_seconds(seconds)
-                    current_time_display = datetime.now().strftime("%H:%M:%S")
                     print(
-                        f"{Colors.CYAN+Colors.BOLD}[{current_time_display}]{Colors.RESET}"
-                        f"{Colors.WHITE+Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.BLUE+Colors.BOLD}Tunggu selama{Colors.RESET}"
-                        f"{Colors.WHITE+Colors.BOLD} {formatted_time} {Colors.RESET}"
-                        f"{Colors.BLUE+Colors.BOLD}untuk proses berikutnya...{Colors.RESET}",
+                        f"{Colors.BRIGHT_BLACK}[ {datetime.now().astimezone(wib).strftime('%H:%M:%S')} ]{Colors.RESET} "
+                        f"{Colors.CYAN}[⟳] Task Completeed Next cycle in: {formatted_time}",
                         end="\r",
-                        flush=True # Added flush=True
+                        flush=True
                     )
                     await asyncio.sleep(1)
                     seconds -= 1
@@ -1400,8 +1400,6 @@ class KiteAi:
             return
         except Exception as e:
             logger.error(f"Terjadi kesalahan tak terduga: {e}")
-            # Do not re-raise the exception if you want the bot to continue or handle it gracefully
-            # raise e
 
 if __name__ == "__main__":
     try:
