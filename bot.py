@@ -139,15 +139,8 @@ class KiteAi:
     def clear_terminal(self):
         clear_console()
 
-    def log(self, message):
-        print(
-            f"{Colors.CYAN + Colors.BOLD}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Colors.RESET}"
-            f"{Colors.WHITE + Colors.BOLD} | {Colors.RESET}{message}",
-            flush=True
-        )
-
-    def welcome(self):
-        asyncio.run(display_welcome_screen())
+    async def welcome(self): # Made async
+        await display_welcome_screen()
 
     def format_seconds(self, seconds):
         hours, remainder = divmod(seconds, 3600)
@@ -166,7 +159,7 @@ class KiteAi:
         filename = "agents.json"
         try:
             if not os.path.exists(filename):
-                self.log(f"{Colors.RED}File {filename} Not Found.{Colors.RESET}")
+                logger.error(f"File {filename} Not Found.")
                 return []
 
             with open(filename, 'r') as file:
@@ -175,6 +168,7 @@ class KiteAi:
                     return data
                 return []
         except json.JSONDecodeError:
+            logger.error(f"Error decoding JSON from {filename}.")
             return []
     
     async def load_proxies(self, use_proxy_choice: int):
@@ -182,7 +176,7 @@ class KiteAi:
         try:
             if use_proxy_choice == 1:
                 if not os.path.exists(filename):
-                    self.log(f"{Colors.RED + Colors.BOLD}File {filename} Not Found.{Colors.RESET}")
+                    logger.error(f"File {filename} Not Found.")
                     return
                 with open(filename, 'r') as f:
                     self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
@@ -196,16 +190,13 @@ class KiteAi:
                         self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
             
             if not self.proxies:
-                self.log(f"{Colors.RED + Colors.BOLD}No Proxies Found.{Colors.RESET}")
+                logger.error("No Proxies Found.")
                 return
 
-            self.log(
-                f"{Colors.GREEN + Colors.BOLD}Proxies Total  : {Colors.RESET}"
-                f"{Colors.WHITE + Colors.BOLD}{len(self.proxies)}{Colors.RESET}"
-            )
+            logger.info(f"Proxies Total : {len(self.proxies)}")
         
         except Exception as e:
-            self.log(f"{Colors.RED + Colors.BOLD}Failed To Load Proxies: {e}{Colors.RESET}")
+            logger.error(f"Failed To Load Proxies: {e}")
             self.proxies = []
 
     def check_proxy_schemes(self, proxies):
@@ -257,6 +248,7 @@ class KiteAi:
             address = account.address
             return address
         except Exception as e:
+            logger.error(f"Error generating address: {e}")
             return None
         
     def mask_account(self, account):
@@ -264,6 +256,7 @@ class KiteAi:
             mask_account = account[:6] + '*' * 6 + account[-6:]
             return mask_account
         except Exception as e:
+            logger.error(f"Error masking account: {e}")
             return None
         
     def generate_auth_token(self, address):
@@ -283,6 +276,7 @@ class KiteAi:
 
             return result_hex
         except Exception as e:
+            logger.error(f"Error generating auth token: {e}")
             return None
     
     def generate_quiz_title(self):
@@ -411,10 +405,7 @@ class KiteAi:
             return token_balance
 
         except Exception as e:
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Message :{Colors.RESET}"
-                f"{Colors.RED+Colors.BOLD} {str(e)} {Colors.RESET}"
-            )
+            logger.error(f"Get token balance failed: {str(e)}")
             return None
         
     async def send_raw_transaction_with_retries(self, account, web3, tx, retries=5):
@@ -485,10 +476,7 @@ class KiteAi:
             return tx_hash, block_number, amount_to_wei
 
         except Exception as e:
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Message :{Colors.RESET}"
-                f"{Colors.RED+Colors.BOLD} {str(e)} {Colors.RESET}"
-            )
+            logger.error(f"Perform bridge failed: {str(e)}")
             return None, None, None
         
     async def print_timer(self, type: str):
@@ -680,11 +668,7 @@ class KiteAi:
                 async with ClientSession(timeout=ClientTimeout(total=60)) as session:
                     
                     if self.CAPTCHA_KEY is None:
-                        self.log(
-                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                            f"{Colors.YELLOW + Colors.BOLD} 2Captcha Key Is None {Colors.RESET}"
-                        )
+                        logger.warn("2Captcha Key Is None")
                         return None
 
                     url = f"http://2captcha.com/in.php?key={self.CAPTCHA_KEY}&method=userrecaptcha&googlekey={self.SITE_KEY}&pageurl={self.TESTNET_API}&json=1"
@@ -694,21 +678,12 @@ class KiteAi:
 
                         if result.get("status") != 1:
                             err_text = result.get("error_text", "Unknown Error")
-                            
-                            self.log(
-                                f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                                f"{Colors.BLUE + Colors.BOLD}Message :{Colors.RESET}"
-                                f"{Colors.YELLOW + Colors.BOLD} {err_text} {Colors.RESET}"
-                            )
+                            logger.warn(f"2Captcha API Error: {err_text}")
                             await asyncio.sleep(5)
                             continue
 
                         request_id = result.get("request")
-                        self.log(
-                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                            f"{Colors.BLUE + Colors.BOLD}Req Id  :{Colors.RESET}"
-                            f"{Colors.WHITE + Colors.BOLD} {request_id} {Colors.RESET}"
-                        )
+                        logger.info(f"Recaptcha Request ID: {request_id}")
 
                         for _ in range(30):
                             res_url = f"http://2captcha.com/res.php?key={self.CAPTCHA_KEY}&action=get&id={request_id}&json=1"
@@ -720,28 +695,20 @@ class KiteAi:
                                     recaptcha_token = res_result.get("request")
                                     return recaptcha_token
                                 elif res_result.get("request") == "CAPCHA_NOT_READY":
-                                    self.log(
-                                        f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                                        f"{Colors.BLUE + Colors.BOLD}Message :{Colors.RESET}"
-                                        f"{Colors.YELLOW + Colors.BOLD} Recaptcha Not Ready {Colors.RESET}"
-                                    )
+                                    logger.info("Recaptcha Not Ready, waiting...")
                                     await asyncio.sleep(5)
                                     continue
                                 else:
+                                    logger.error(f"Failed to retrieve recaptcha result: {res_result.get('request')}")
                                     break
 
             except (Exception, ClientResponseError) as e:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.RED + Colors.BOLD} Recaptcha Unsolved {Colors.RESET}"
-                    f"{Colors.MAGENTA + Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW + Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Recaptcha Unsolved - {str(e)}")
                 return None
+        return None
     
     async def check_connection(self, proxy_url=None):
         connector, proxy, proxy_auth = self.build_proxy_config(proxy_url)
@@ -751,14 +718,9 @@ class KiteAi:
                     response.raise_for_status()
                     return True
         except (Exception, ClientResponseError) as e:
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
-                f"{Colors.RED+Colors.BOLD} Connection Not 200 OK {Colors.RESET}"
-                f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-            )
+            logger.error(f"Connection Not OK - {str(e)}")
         
-        return None
+        return False
     
     async def user_signin(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.NEO_API}/signin"
@@ -791,14 +753,9 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Login Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Login Failed - {str(e)}")
         
-        return None, None
+        return None
     
     async def user_data(self, address: str, use_proxy: bool, retries=5):
         url = f"{self.OZONE_API}/me"
@@ -819,12 +776,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Fetch User Data Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Fetch User Data Failed - {str(e)}")
 
         return None
     
@@ -850,13 +802,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Not Claimed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Faucet Not Claimed - {str(e)}")
 
         return None
         
@@ -883,12 +829,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Daily Quiz:{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} GET Id Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Daily Quiz GET Id Failed - {str(e)}")
 
         return None
         
@@ -912,13 +853,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} GET Question & Answer Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"GET Question & Answer Failed - {str(e)}")
 
         return None
             
@@ -945,13 +880,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Submit Answer Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Submit Answer Failed - {str(e)}")
 
         return None
             
@@ -974,12 +903,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Error     :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} GET Balance Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"GET Balance Failed - {str(e)}")
 
         return None
             
@@ -1005,12 +929,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Stake Failed - {str(e)}")
 
         return None
             
@@ -1036,12 +955,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Unstake   :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Unstake Failed - {str(e)}")
 
         return None
             
@@ -1081,13 +995,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Agents Didn't Respond {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Agents Didn't Respond - {str(e)}")
 
         return None
             
@@ -1114,13 +1022,7 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Submit Receipt Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Submit Receipt Failed - {str(e)}")
 
         return None
     
@@ -1145,85 +1047,46 @@ class KiteAi:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}     Submit  :{Colors.RESET}"
-                    f"{Colors.RED+Colors.BOLD} Failed {Colors.RESET}"
-                    f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} {str(e)} {Colors.RESET}"
-                )
+                logger.error(f"Submit Bridge Transfer Failed - {str(e)}")
 
         return None
     
     async def process_perform_bridge(self, account: str, address: str, rpc_url: str, src_chain_id: int, dest_chain_id: int, src_address: str, dest_address: str, amount: float, token_type: str, explorer: str, use_proxy: bool):
         tx_hash, block_number, amount_to_wei = await self.perform_bridge(account, address, rpc_url, dest_chain_id, src_address, amount, token_type, use_proxy)
         if tx_hash and block_number and amount_to_wei:
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Status  :{Colors.RESET}"
-                f"{Colors.GREEN+Colors.BOLD} Success {Colors.RESET}"
-            )
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Block   :{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {block_number} {Colors.RESET}"
-            )
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Tx Hash :{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {tx_hash} {Colors.RESET}"
-            )
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Explorer:{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {explorer}{tx_hash} {Colors.RESET}"
-            )
+            logger.info("Bridge Transaction Success")
+            logger.info(f"Block   : {block_number}")
+            logger.info(f"Tx Hash : {tx_hash}")
+            logger.info(f"Explorer: {explorer}{tx_hash}")
 
             submit = await self.submit_bridge_transfer(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash, use_proxy)
             if submit:
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}     Submit  :{Colors.RESET}"
-                    f"{Colors.GREEN+Colors.BOLD} Success  {Colors.RESET}"
-                )
+                logger.info("Bridge Transfer Submitted Successfully")
 
         else:
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Status  :{Colors.RESET}"
-                f"{Colors.RED+Colors.BOLD} Perform On-Chain Failed {Colors.RESET}"
-            )
+            logger.error("Perform On-Chain Bridge Failed")
 
     async def process_option_1(self, address: str, user: dict, use_proxy: bool):
         is_claimable = user.get("data", {}).get("faucet_claimable", False)
         if is_claimable:
-            self.log(f"{Colors.CYAN+Colors.BOLD}Faucet    :{Colors.RESET}")
+            logger.step("Faucet Claim:")
 
-            self.log(
-                f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                f"{Colors.YELLOW + Colors.BOLD}Solving Recaptcha...{Colors.RESET}"
-            )
-
+            logger.loading("Solving Recaptcha...")
             recaptcha_token = await self.solve_recaptcha()
             if recaptcha_token:
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Message :{Colors.RESET}"
-                    f"{Colors.GREEN + Colors.BOLD} Recaptcha Solved Successfully {Colors.RESET}"
-                )
+                logger.info("Recaptcha Solved Successfully")
 
                 claim = await self.claim_faucet(address, recaptcha_token, use_proxy)
                 if claim:
-                    self.log(
-                        f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                        f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                        f"{Colors.GREEN + Colors.BOLD} Claimed Successfully {Colors.RESET}"
-                    )
+                    logger.success("Faucet Claimed Successfully")
 
         else:
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}Faucet    :{Colors.RESET}"
-                f"{Colors.YELLOW+Colors.BOLD} Not Time to Claim {Colors.RESET}"
-            )
+            logger.warn("Faucet: Not Time to Claim")
 
     async def process_option_2(self, address: str, use_proxy: bool):
+        logger.step("Daily Quiz:")
         create = await self.create_quiz(address, use_proxy)
         if create:
-            self.log(f"{Colors.CYAN+Colors.BOLD}Daily Quiz:{Colors.RESET}")
-
             quiz_id = create.get("data", {}).get("quiz_id")
             status = create.get("data", {}).get("status")
 
@@ -1239,49 +1102,26 @@ class KiteAi:
                                 quiz_content = quiz_question.get("content")
                                 quiz_answer = quiz_question.get("answer")
 
-                                self.log(
-                                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                                    f"{Colors.BLUE + Colors.BOLD}Question:{Colors.RESET}"
-                                    f"{Colors.WHITE+Colors.BOLD} {quiz_content} {Colors.RESET}"
-                                )
-                                self.log(
-                                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                                    f"{Colors.BLUE + Colors.BOLD}Answer  :{Colors.RESET}"
-                                    f"{Colors.WHITE+Colors.BOLD} {quiz_answer} {Colors.RESET}"
-                                )
+                                logger.info(f"Question: {quiz_content}")
+                                logger.info(f"Answer  : {quiz_answer}")
 
                                 submit_quiz = await self.submit_quiz(address, quiz_id, question_id, quiz_answer, use_proxy)
                                 if submit_quiz:
                                     result = submit_quiz.get("data", {}).get("result")
 
                                     if result == "RIGHT":
-                                        self.log(
-                                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                                            f"{Colors.GREEN+Colors.BOLD} Answered Successfully {Colors.RESET}"
-                                        )
+                                        logger.success("Quiz Answered Successfully")
                                     else:
-                                        self.log(
-                                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                                            f"{Colors.YELLOW+Colors.BOLD} Wrong Answer {Colors.RESET}"
-                                        )
+                                        logger.warn("Quiz: Wrong Answer")
 
                     else:
-                        self.log(
-                            f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                            f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                            f"{Colors.RED+Colors.BOLD} GET Quiz Answer Failed {Colors.RESET}"
-                        )
+                        logger.error("GET Quiz Answer Failed")
 
             else:
-                self.log(
-                    f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                    f"{Colors.BLUE + Colors.BOLD}Status  :{Colors.RESET}"
-                    f"{Colors.YELLOW + Colors.BOLD} Already Answered {Colors.RESET}"
-                )
+                logger.warn("Daily Quiz: Already Answered")
 
     async def process_option_3(self, address: str, use_proxy: bool):
+        logger.step("Stake Token:")
         balance = await self.token_balance(address, use_proxy)
         if balance:
             kite_balance = balance.get("data", {}).get("balances", {}).get("kite", 0)
@@ -1289,45 +1129,25 @@ class KiteAi:
             if kite_balance >= 1:
                 stake = await self.stake_token(address, use_proxy)
                 if stake:
-                    self.log(
-                        f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
-                        f"{Colors.GREEN+Colors.BOLD} Success {Colors.RESET}"
-                        f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                        f"{Colors.CYAN+Colors.BOLD} Amount: {Colors.RESET}"
-                        f"{Colors.WHITE+Colors.BOLD}1 KITE{Colors.RESET}"
-                    )
+                    logger.success(f"Stake Success - Amount: 1 KITE")
 
             else:
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Stake     :{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} Insufficient Kite Token Balance {Colors.RESET}"
-                )
+                logger.warn("Stake: Insufficient Kite Token Balance")
 
     async def process_option_4(self, address: str, use_proxy: bool):
+        logger.step("Unstake Token:")
         unstake = await self.claim_stake_rewards(address, use_proxy)
         if unstake:
             reward = unstake.get("data", {}).get("claim_amount", 0)
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}Unstake   :{Colors.RESET}"
-                f"{Colors.GREEN+Colors.BOLD} Success {Colors.RESET}"
-                f"{Colors.MAGENTA+Colors.BOLD}-{Colors.RESET}"
-                f"{Colors.CYAN+Colors.BOLD} Reward: {Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD}{reward} KITE{Colors.RESET}"
-            )
+            logger.success(f"Unstake Success - Reward: {reward} KITE")
 
     async def process_option_5(self, address: str, sa_address: str, use_proxy: bool):
-        self.log(f"{Colors.CYAN+Colors.BOLD}AI Agents :{Colors.RESET}")
+        logger.step("AI Agents Chat:")
 
         used_questions_per_agent = {}
 
         for i in range(self.chat_count):
-            self.log(
-                f"{Colors.MAGENTA + Colors.BOLD}  ● {Colors.RESET}"
-                f"{Colors.GREEN + Colors.BOLD}Interactions{Colors.RESET}"
-                f"{Colors.WHITE + Colors.BOLD} {i+1} {Colors.RESET}"
-                f"{Colors.MAGENTA + Colors.BOLD}Of{Colors.RESET}"
-                f"{Colors.WHITE + Colors.BOLD} {self.chat_count} {Colors.RESET}                           "
-            )
+            logger.info(f"Interactions {i+1} Of {self.chat_count}")
 
             agent = random.choice(self.agent_lists)
             agent_name = agent["agentName"]
@@ -1341,47 +1161,33 @@ class KiteAi:
             available_questions = [q for q in questions if q not in used_questions]
 
             if not available_questions:
+                logger.warn(f"No new questions available for agent {agent_name}. Skipping.")
                 continue
 
             question = random.choice(available_questions)
 
-            self.log(
-                f"{Colors.BLUE + Colors.BOLD}    AI Agent: {Colors.RESET}"
-                f"{Colors.WHITE + Colors.BOLD}{agent_name}{Colors.RESET}"
-            )
-            self.log(
-                f"{Colors.BLUE + Colors.BOLD}    Question: {Colors.RESET}"
-                f"{Colors.WHITE + Colors.BOLD}{question}{Colors.RESET}"
-            )
+            logger.info(f"    AI Agent: {agent_name}")
+            logger.info(f"    Question: {question}")
 
             answer = await self.agent_inference(address, service_id, question, use_proxy)
             if not answer:
+                logger.error("AI Agent did not provide an answer.")
                 continue
 
-            self.log(
-                f"{Colors.BLUE + Colors.BOLD}    Answer  : {Colors.RESET}"
-                f"{Colors.WHITE + Colors.BOLD}{answer.strip()}{Colors.RESET}"
-            )
+            logger.info(f"    Answer  : {answer.strip()}")
 
             submit = await self.submit_receipt(address, sa_address, service_id, question, answer, use_proxy)
             if submit:
-                self.log(
-                    f"{Colors.BLUE + Colors.BOLD}    Status  : {Colors.RESET}"
-                    f"{Colors.GREEN + Colors.BOLD}Receipt Submited Successfully{Colors.RESET}"
-                )
+                logger.success("Receipt Submitted Successfully")
 
             used_questions.add(question)
             await self.print_timer("Interaction")
 
     async def process_option_6(self, account: str, address: str, use_proxy: bool):
-        self.log(f"{Colors.CYAN+Colors.BOLD}Bridge    :{Colors.RESET}                       ")
+        logger.step("Bridge Transaction:")
 
         for i in range(self.bridge_count):
-            self.log(
-                f"{Colors.MAGENTA+Colors.BOLD}   ● {Colors.RESET}"
-                f"{Colors.GREEN+Colors.BOLD}Bridge{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {i+1} / {self.bridge_count} {Colors.RESET}                           "
-            )
+            logger.info(f"Bridge {i+1} / {self.bridge_count}")
 
             bridge_data = self.generate_bridge_option()
             option = bridge_data["option"]
@@ -1398,24 +1204,12 @@ class KiteAi:
 
             balance = await self.get_token_balance(address, rpc_url, src_address, token_type, use_proxy)
 
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Pair    :{Colors.RESET}"
-                f"{Colors.BLUE+Colors.BOLD} {option} {Colors.RESET}"
-            )
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Balance :{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {balance} {src_ticker} {Colors.RESET}"
-            )
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}     Amount  :{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {amount} {src_ticker} {Colors.RESET}"
-            )
+            logger.info(f"    Pair    : {option}")
+            logger.info(f"    Balance : {balance} {src_ticker}")
+            logger.info(f"    Amount  : {amount} {src_ticker}")
 
             if not balance or balance <= amount:
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}     Status  :{Colors.RESET}"
-                    f"{Colors.YELLOW+Colors.BOLD} Insufficient {src_ticker} Token Balance {Colors.RESET}"
-                )
+                logger.warn(f"Insufficient {src_ticker} Token Balance. Skipping bridge.")
                 continue
 
             await self.process_perform_bridge(account, address, rpc_url, src_chain_id, dest_chain_id, src_address, dest_address, amount, token_type, explorer, use_proxy)
@@ -1424,63 +1218,48 @@ class KiteAi:
     async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
         while True:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}Proxy     :{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {proxy} {Colors.RESET}"
-            )
+            logger.info(f"Proxy     : {proxy}")
 
             is_valid = await self.check_connection(proxy)
             if not is_valid:
                 if rotate_proxy:
                     proxy = self.rotate_proxy_for_account(address)
+                    logger.warn("Rotating proxy due to invalid connection.")
                     continue
                 else:
+                    logger.error("Connection failed and proxy rotation is disabled. Skipping account.")
                     return False
             return True
         
     async def process_user_signin(self, address: str, use_proxy: bool, rotate_proxy: bool):
-        is_valid = await self.process_check_connection(address, use_proxy, rotate_proxy)
-        if is_valid:
-            
+        is_connected = await self.process_check_connection(address, use_proxy, rotate_proxy)
+        if is_connected:
             signin = await self.user_signin(address, use_proxy)
             if signin:
                 self.access_tokens[address] = signin["data"]["access_token"]
-
-                self.log(
-                    f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
-                    f"{Colors.GREEN+Colors.BOLD} Login Success {Colors.RESET}"
-                )
+                logger.success("Login Success")
                 return True
-
+            else:
+                logger.error("User sign-in failed.")
+                return False
+        else:
             return False
         
     async def process_accounts(self, account: str, address: str, option: int, use_proxy: bool, rotate_proxy: bool):
         signed = await self.process_user_signin(address, use_proxy, rotate_proxy)
         if signed:
-
             user = await self.user_data(address, use_proxy)
             if not user:
+                logger.error("Failed to fetch user data. Skipping account.")
                 return
             
             username = user.get("data", {}).get("profile", {}).get("username", "Unknown")
             sa_address = user.get("data", {}).get("profile", {}).get("smart_account_address", "Undefined")
             balance = user.get("data", {}).get("profile", {}).get("total_xp_points", 0)
             
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}Username  :{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {username} {Colors.RESET}"
-            )
-            
-            self.log(
-                f"{Colors.CYAN+Colors.BOLD}SA Address:{Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD} {self.mask_account(sa_address)} {Colors.RESET}"
-            )
-            self.log(f"{Colors.CYAN+Colors.BOLD}Balance   :{Colors.RESET}")
-
-            self.log(
-                f"{Colors.MAGENTA+Colors.BOLD}  ● {Colors.RESET}"
-                f"{Colors.WHITE+Colors.BOLD}{balance} XP{Colors.RESET}"
-            )
+            logger.info(f"Username  : {username}")
+            logger.info(f"SA Address: {self.mask_account(sa_address)}")
+            logger.info(f"Balance   : {balance} XP")
             
             if option == 1:
                 await self.process_option_1(address, user, use_proxy)
@@ -1500,7 +1279,7 @@ class KiteAi:
             elif option == 6:
                 await self.process_option_6(account, address, use_proxy)
 
-            else:
+            else: # Option 7: Run All Features
                 if self.auto_faucet:
                     await self.process_option_1(address, user, use_proxy)
                     await asyncio.sleep(5)
@@ -1535,7 +1314,7 @@ class KiteAi:
 
             agents = self.load_ai_agents()
             if not agents:
-                self.log(f"{Colors.RED + Colors.BOLD}No Agents Loaded.{Colors.RESET}")
+                logger.error("No Agents Loaded. Exiting.")
                 return
             
             self.agent_lists = agents
@@ -1548,11 +1327,8 @@ class KiteAi:
                     use_proxy = True
 
                 self.clear_terminal()
-                self.welcome()
-                self.log(
-                    f"{Colors.GREEN + Colors.BOLD}Account's Total: {Colors.RESET}"
-                    f"{Colors.WHITE + Colors.BOLD}{len(accounts)}{Colors.RESET}"
-                )
+                await self.welcome() # Changed to await
+                logger.info(f"Account's Total: {len(accounts)}")
 
                 if use_proxy:
                     await self.load_proxies(use_proxy_choice)
@@ -1561,25 +1337,15 @@ class KiteAi:
                 for account in accounts:
                     if account:
                         address = self.generate_address(account)
-                        self.log(
-                            f"{Colors.CYAN + Colors.BOLD}{separator}[{Colors.RESET}"
-                            f"{Colors.WHITE + Colors.BOLD} {self.mask_account(address)} {Colors.RESET}"
-                            f"{Colors.CYAN + Colors.BOLD}]{separator}{Colors.RESET}"
-                        )
+                        logger.info(f"{separator}[ {self.mask_account(address)} ]{separator}")
 
                         if not address:
-                            self.log(
-                                f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
-                                f"{Colors.RED+Colors.BOLD} Invalid Private Key or Libraries Version Not Supported {Colors.RESET}"
-                            )
+                            logger.error("Invalid Private Key or Libraries Version Not Supported.")
                             continue
                         
                         auth_token = self.generate_auth_token(address)
                         if not auth_token:
-                            self.log(
-                                f"{Colors.CYAN+Colors.BOLD}Status    :{Colors.RESET}"
-                                f"{Colors.RED+Colors.BOLD} Generate Auth Token Failed, Check Your Cryptography Library {Colors.RESET}                  "
-                            )
+                            logger.error("Generate Auth Token Failed. Check Your Cryptography Library.")
                             continue
 
                         user_agent = FakeUserAgent().random
@@ -1611,7 +1377,7 @@ class KiteAi:
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
                         await asyncio.sleep(3)
 
-                self.log(f"{Colors.CYAN + Colors.BOLD}={Colors.RESET}"*72)
+                logger.info("="*72)
                 seconds = 24 * 60 * 60
                 while seconds > 0:
                     formatted_time = self.format_seconds(seconds)
@@ -1627,11 +1393,12 @@ class KiteAi:
                     seconds -= 1
 
         except FileNotFoundError:
-            self.log(f"{Colors.RED}File 'accounts.txt' Not Found.{Colors.RESET}")
+            logger.error("File 'accounts.txt' Not Found.")
             return
-        except ( Exception, ValueError ) as e:
-            self.log(f"{Colors.RED+Colors.BOLD}Error: {e}{Colors.RESET}")
-            raise e
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}")
+            # Do not re-raise the exception if you want the bot to continue or handle it gracefully
+            # raise e
 
 if __name__ == "__main__":
     try:
