@@ -480,7 +480,7 @@ def get_token_balance(self, address: str, rpc_url: str, contract_address: str, t
             logger.error(f"Get token balance failed: {str(e)}")
             return None
 
-        async def send_raw_transaction_with_retries(self, account, web3, tx, retries=5):
+            async def send_raw_transaction_with_retries(self, account, web3, tx, retries=5):
         for attempt in range(retries):
             try:
                 signed_tx = account.sign_transaction(tx)
