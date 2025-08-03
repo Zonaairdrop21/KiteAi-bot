@@ -422,16 +422,39 @@ class KiteAi:
                 if http_proxy_auth:
                     request_kwargs["proxy_auth"] = http_proxy_auth
 
-        for attempt in range(retries):
-            try:
-                web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs=request_kwargs))
-                web3.eth.get_block_number()
-                return web3
-            except Exception as e:
-                if attempt < retries - 1:
-                    await asyncio.sleep(3)
-                    continue
-                raise Exception(f"Failed to Connect to RPC: {str(e)}")
+        from web3.types import RPCEndpoint
+
+class PatchedWeb3(Web3):
+    def geth_poa_fix(self):
+        self.manager.request_blocking = self._patched_request_blocking(self.manager.request_blocking)
+
+    def _patched_request_blocking(self, original_request_blocking):
+        def patched(method: RPCEndpoint, params=None):
+            if method == "eth_getBlockByNumber":
+                result = original_request_blocking(method, params)
+                if isinstance(result, dict) and "extraData" in result:
+                    ed = result["extraData"]
+                    if isinstance(ed, bytes) and len(ed) > 32:
+                        result["extraData"] = ed[:32]
+                return result
+            return original_request_blocking(method, params)
+        return patched
+
+for attempt in range(retries):
+    try:
+        web3 = PatchedWeb3(Web3.HTTPProvider(rpc_url, request_kwargs=request_kwargs))
+
+        # PATCH: bypass PoA extraData error untuk Kite RPC
+        if rpc_url == self.KITE_AI["rpc_url"]:
+            web3.geth_poa_fix()
+
+        web3.eth.get_block_number()  # trigger connection test
+        return web3
+    except Exception as e:
+        if attempt < retries - 1:
+            await asyncio.sleep(3)
+            continue
+        raise Exception(f"Failed to Connect to RPC: {str(e)}")
 
     async def get_token_balance(self, address: str, rpc_url: str, contract_address: str, token_type: str, use_proxy: bool):
         try:
