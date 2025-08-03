@@ -1,6 +1,5 @@
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
-from web3.middleware import geth_poa_middleware
 from eth_account import Account
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -426,11 +425,6 @@ class KiteAi:
         for attempt in range(retries):
             try:
                 web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs=request_kwargs))
-
-                # Add Geth PoA middleware if RPC URL matches Kite AI
-                if rpc_url == self.KITE_AI["rpc_url"]:
-                    web3.middleware_onion.inject(geth_poa_middleware, layer=0)
-                
                 web3.eth.get_block_number()
                 return web3
             except Exception as e:
