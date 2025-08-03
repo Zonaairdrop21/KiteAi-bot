@@ -108,7 +108,7 @@ class KiteAi:
         ]''')
         self.SWAP_ROUTER = "0x04CfcA82fDf5F4210BC90f06C44EF25Bf743D556"
         self.USDT_CONTRACT = "0x0fF5393387ad2f9f691FD6Fd28e07E3969e27e63"
-        self.WKITE_CONTRACT = "0x0BBB7293c08dE4e62137a557BC40bc12FA1897d6"
+        self.WKITE_CONTRACT = "0x3bC8f037691Ce1d28c0bB224BD33563b49F99dE8"
         self.SWAP_ABI = json.loads('''[
             {
                 "name": "initiate",
