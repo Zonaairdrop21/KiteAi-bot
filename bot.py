@@ -111,15 +111,46 @@ class KiteAi:
         self.WKITE_CONTRACT = "0x3bC8f037691Ce1d28c0bB224BD33563b49F99dE8"
         self.SWAP_ABI = json.loads('''[
             {
-                "name": "initiate",
-                "type": "function",
-                "stateMutability": "payable",
                 "inputs": [
-                    { "name": "token", "type": "address" },
-                    { "name": "amount", "type": "uint256" },
-                    { "name": "instructions", "type": "tuple" }
+                    {"internalType":"address","name":"token","type":"address"},
+                    {"internalType":"uint256","name":"amount","type":"uint256"},
+                    {
+                        "components": [
+                            {"internalType":"uint256","name":"sourceId","type":"uint256"},
+                            {"internalType":"address","name":"receiver","type":"address"},
+                            {"internalType":"bool","name":"payableReceiver","type":"bool"},
+                            {"internalType":"address","name":"rollbackReceiver","type":"address"},
+                            {"internalType":"uint256","name":"rollbackTeleporterFee","type":"uint256"},
+                            {"internalType":"uint256","name":"rollbackGasLimit","type":"uint256"},
+                            {
+                                "components": [
+                                    {"internalType":"enum Action","name":"action","type":"uint8"},
+                                    {"internalType":"uint256","name":"requiredGasLimit","type":"uint256"},
+                                    {"internalType":"uint256","name":"recipientGasLimit","type":"uint256"},
+                                    {"internalType":"bytes","name":"trade","type":"bytes"},
+                                    {
+                                        "components": [
+                                            {"internalType":"address","name":"bridgeSourceChain","type":"address"},
+                                            {"internalType":"bool","name":"sourceBridgeIsNative","type":"bool"},
+                                            {"internalType":"address","name":"bridgeDestinationChain","type":"address"},
+                                            {"internalType":"address","name":"cellDestinationChain","type":"address"},
+                                            {"internalType":"bytes32","name":"destinationBlockchainID","type":"bytes32"},
+                                            {"internalType":"uint256","name":"teleporterFee","type":"uint256"},
+                                            {"internalType":"uint256","name":"secondaryTeleporterFee","type":"uint256"}
+                                        ],
+                                        "internalType":"struct BridgePath","name":"bridgePath","type":"tuple"
+                                    }
+                                ],
+                                "internalType":"struct Hop[]","name":"hops","type":"tuple[]"
+                            }
+                        ],
+                        "internalType":"struct Instructions","name":"instructions","type":"tuple"
+                    }
                 ],
-                "outputs": []
+                "name": "initiate",
+                "outputs": [],
+                "stateMutability": "payable",
+                "type": "function"
             }
         ]''')
         self.TESTNET_API = "https://testnet.gokite.ai"
