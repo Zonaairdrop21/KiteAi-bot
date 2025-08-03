@@ -480,19 +480,17 @@ def get_token_balance(self, address: str, rpc_url: str, contract_address: str, t
             logger.error(f"Get token balance failed: {str(e)}")
             return None
 
-    async def send_raw_transaction_with_retries(self, account, web3, tx, retries=5):
+        async def send_raw_transaction_with_retries(self, account, web3, tx, retries=5):
         for attempt in range(retries):
             try:
-                signed_tx = web3.eth.account.sign_transaction(tx, account)
-                raw_tx = web3.eth.send_raw_transaction(signed_tx.raw_transaction)
-                tx_hash = web3.to_hex(raw_tx)
+                signed_tx = account.sign_transaction(tx)
+                tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
                 return tx_hash
-            except TransactionNotFound:
-                pass
             except Exception as e:
-                pass
-            await asyncio.sleep(2 ** attempt)
-        raise Exception("Transaction Hash Not Found After Maximum Retries")
+                if attempt < retries - 1:
+                    await asyncio.sleep(2)
+                    continue
+                raise Exception(f"Send transaction failed after {retries} retries: {e}")
 
     async def wait_for_receipt_with_retries(self, web3, tx_hash, retries=5):
         for attempt in range(retries):
