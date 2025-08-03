@@ -448,17 +448,54 @@ for attempt in range(retries):
         if rpc_url == self.KITE_AI["rpc_url"]:
             web3.geth_poa_fix()
 
-        web3.eth.get_block_number()  # trigger connection test
-        return web3
-    except Exception as e:
-        if attempt < retries - 1:
-            await asyncio.sleep(3)
-            continue
-        raise Exception(f"Failed to Connect to RPC: {str(e)}")
+        from web3.types import RPCEndpoint
 
-    async def get_token_balance(self, address: str, rpc_url: str, contract_address: str, token_type: str, use_proxy: bool):
+async def get_web3_with_check(self, address: str, rpc_url: str, use_proxy: bool, retries=3, timeout=60):
+    request_kwargs = {"timeout": timeout}
+
+    proxy = self.get_next_proxy_for_account(address) if use_proxy else None
+
+    if use_proxy and proxy:
+        connector, http_proxy, http_proxy_auth = self.build_proxy_config(proxy)
+        if connector:
+            request_kwargs["connector"] = connector
+        else:
+            request_kwargs["proxy"] = http_proxy
+            if http_proxy_auth:
+                request_kwargs["proxy_auth"] = http_proxy_auth
+
+    # PATCH: class untuk mengatasi error extraData (Web3 v7+)
+    class PatchedWeb3(Web3):
+        def geth_poa_fix(self):
+            self.manager.request_blocking = self._patched_request_blocking(self.manager.request_blocking)
+
+        def _patched_request_blocking(self, original_request_blocking):
+            def patched(method: RPCEndpoint, params=None):
+                if method == "eth_getBlockByNumber":
+                    result = original_request_blocking(method, params)
+                    if isinstance(result, dict) and "extraData" in result:
+                        ed = result["extraData"]
+                        if isinstance(ed, bytes) and len(ed) > 32:
+                            result["extraData"] = ed[:32]
+                    return result
+                return original_request_blocking(method, params)
+            return patched
+
+    for attempt in range(retries):
         try:
-            web3 = await self.get_web3_with_check(address, rpc_url, use_proxy)
+            web3 = PatchedWeb3(Web3.HTTPProvider(rpc_url, request_kwargs=request_kwargs))
+
+            # Hanya aktifkan patch jika pakai RPC Kite AI
+            if rpc_url == self.KITE_AI["rpc_url"]:
+                web3.geth_poa_fix()
+
+            web3.eth.get_block_number()  # Trigger koneksi
+            return web3
+        except Exception as e:
+            if attempt < retries - 1:
+                await asyncio.sleep(3)
+                continue
+            raise Exception(f"Failed to Connect to RPC: {str(e)}")
 
             if token_type == "native":
                 balance = web3.eth.get_balance(address)
