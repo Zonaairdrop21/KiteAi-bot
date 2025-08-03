@@ -106,6 +106,22 @@ class KiteAi:
             {"type":"function","name":"approve","stateMutability":"nonpayable","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"name":"","type":"bool"}]},
             {"type":"function","name":"decimals","stateMutability":"view","inputs":[],"outputs":[{"name":"","type":"uint8"}]}
         ]''')
+        self.SWAP_ROUTER = "0x04CfcA82fDf5F4210BC90f06C44EF25Bf743D556"
+        self.USDT_CONTRACT = "0x0fF5393387ad2f9f691FD6Fd28e07E3969e27e63"
+        self.WKITE_CONTRACT = "0x3bC8f037691Ce1d28c0bB224BD33563b49F99dE8"
+        self.SWAP_ABI = json.loads('''[
+            {
+                "name": "initiate",
+                "type": "function",
+                "stateMutability": "payable",
+                "inputs": [
+                    { "name": "token", "type": "address" },
+                    { "name": "amount", "type": "uint256" },
+                    { "name": "instructions", "type": "tuple" }
+                ],
+                "outputs": []
+            }
+        ]''')
         self.TESTNET_API = "https://testnet.gokite.ai"
         self.BRIDGE_API = "https://bridge-backend.prod.gokite.ai"
         self.NEO_API = "https://neo.prod.gokite.ai/v2"
@@ -127,16 +143,20 @@ class KiteAi:
         self.auto_unstake = False
         self.auto_chat = False
         self.auto_bridge = False
+        self.auto_swap = False
         self.chat_count = 0
         self.bridge_count = 0
+        self.swap_count = 0
         self.min_bridge_amount = 0
         self.max_bridge_amount = 0
+        self.min_swap_amount = 0
+        self.max_swap_amount = 0
         self.agent_lists = []
 
     def clear_terminal(self):
         clear_console()
 
-    async def welcome(self): # Made async
+    async def welcome(self):
         await display_welcome_screen()
 
     def format_seconds(self, seconds):
@@ -171,14 +191,14 @@ class KiteAi:
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
-            if use_proxy_choice == 1: # Run With Private Proxy (from proxy.txt)
+            if use_proxy_choice == 1:
                 if not os.path.exists(filename):
                     logger.error(f"File {filename} Not Found for Private Proxies.")
                     return []
                 with open(filename, 'r') as f:
                     self.proxies = [line.strip() for line in f if line.strip()]
             
-            if not self.proxies and use_proxy_choice == 1: # Check only if proxy was intended to be loaded
+            if not self.proxies and use_proxy_choice == 1:
                 logger.error("No Proxies Found in proxy.txt.")
                 return
 
@@ -475,6 +495,53 @@ class KiteAi:
             logger.error(f"Perform bridge failed: {str(e)}")
             return None, None, None
 
+    async def perform_swap(self, account: str, address: str, rpc_url: str, token_in: str, amount: float, use_proxy: bool):
+        try:
+            web3 = await self.get_web3_with_check(address, rpc_url, use_proxy)
+
+            router_contract = web3.eth.contract(
+                address=web3.to_checksum_address(self.SWAP_ROUTER),
+                abi=self.SWAP_ABI
+            )
+
+            amount_to_wei = web3.to_wei(amount, "ether")
+            
+            # For simplicity, using empty tuple for instructions
+            instructions = ()
+            
+            swap_data = router_contract.functions.initiate(
+                web3.to_checksum_address(token_in),
+                amount_to_wei,
+                instructions
+            )
+
+            estimated_gas = swap_data.estimate_gas({"from": address})
+
+            max_priority_fee = web3.to_wei(0.001, "gwei")
+            max_fee = max_priority_fee
+
+            tx_data = {
+                "from": address,
+                "gas": int(estimated_gas * 1.2),
+                "maxFeePerGas": int(max_fee),
+                "maxPriorityFeePerGas": int(max_priority_fee),
+                "nonce": web3.eth.get_transaction_count(address, "pending"),
+                "chainId": web3.eth.chain_id,
+            }
+
+            swap_tx = swap_data.build_transaction(tx_data)
+
+            tx_hash = await self.send_raw_transaction_with_retries(account, web3, swap_tx)
+            receipt = await self.wait_for_receipt_with_retries(web3, tx_hash)
+
+            block_number = receipt.blockNumber
+
+            return tx_hash, block_number, amount_to_wei
+
+        except Exception as e:
+            logger.error(f"Perform swap failed: {str(e)}")
+            return None, None, None
+
     async def print_timer(self, type: str):
         for remaining in range(random.randint(5, 10), 0, -1):
             current_time = datetime.now().strftime("%H:%M:%S")
@@ -488,7 +555,7 @@ class KiteAi:
                 flush=True
             )
             await asyncio.sleep(1)
-        print(" " * 80, end="\r") # Clear the line after countdown
+        print(" " * 80, end="\r")
 
     def print_chat_question(self):
         while True:
@@ -536,6 +603,40 @@ class KiteAi:
             except ValueError:
                 print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
 
+    def print_swap_question(self):
+        while True:
+            try:
+                swap_count = int(input(f"{Colors.YELLOW + Colors.BOLD}Swap Transaction Count? -> {Colors.RESET}").strip())
+                if swap_count > 0:
+                    self.swap_count = swap_count
+                    break
+                else:
+                    print(f"{Colors.RED + Colors.BOLD}Please enter positive number.{Colors.RESET}")
+            except ValueError:
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
+
+        while True:
+            try:
+                min_swap_amount = float(input(f"{Colors.YELLOW + Colors.BOLD}What is the USDT Swap Amount? -> {Colors.RESET}").strip())
+                if min_swap_amount > 0:
+                    self.min_swap_amount = min_swap_amount
+                    break
+                else:
+                    print(f"{Colors.RED + Colors.BOLD}Amount must be greater than 0.{Colors.RESET}")
+            except ValueError:
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
+
+        while True:
+            try:
+                max_swap_amount = float(input(f"{Colors.YELLOW + Colors.BOLD}How Much is KITE Swap? -> {Colors.RESET}").strip())
+                if max_swap_amount >= min_swap_amount:
+                    self.max_swap_amount = max_swap_amount
+                    break
+                else:
+                    print(f"{Colors.RED + Colors.BOLD}Amount must be >= Min Swap Amount.{Colors.RESET}")
+            except ValueError:
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
+
     def print_question(self):
         while True:
             try:
@@ -546,10 +647,11 @@ class KiteAi:
                 print(f"{Colors.WHITE + Colors.BOLD}4. Unstake Token{Colors.RESET}")
                 print(f"{Colors.WHITE + Colors.BOLD}5. AI Agent Chat{Colors.RESET}")
                 print(f"{Colors.WHITE + Colors.BOLD}6. Random Bridge{Colors.RESET}")
-                print(f"{Colors.WHITE + Colors.BOLD}7. Run All Features{Colors.RESET}")
-                option = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2/3/4/5/6/7] -> {Colors.RESET}").strip())
+                print(f"{Colors.WHITE + Colors.BOLD}7. Random Swap{Colors.RESET}")
+                print(f"{Colors.WHITE + Colors.BOLD}8. Run All Features{Colors.RESET}")
+                option = int(input(f"{Colors.BLUE + Colors.BOLD}Choose [1/2/3/4/5/6/7/8] -> {Colors.RESET}").strip())
 
-                if option in [1, 2, 3, 4, 5, 6, 7]:
+                if option in [1, 2, 3, 4, 5, 6, 7, 8]:
                     option_type = (
                         "Claim Faucet" if option == 1 else
                         "Daily Quiz" if option == 2 else
@@ -557,22 +659,23 @@ class KiteAi:
                         "Unstake Token" if option == 4 else
                         "AI Agent Chat" if option == 5 else
                         "Random Bridge" if option == 6 else
+                        "Random Swap" if option == 7 else
                         "Run All Features"
                     )
                     print(f"{Colors.GREEN + Colors.BOLD}{option_type} Selected.{Colors.RESET}")
                     break
                 else:
-                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1, 2, 3, 4, 5, 6, or 7.{Colors.RESET}")
+                    print(f"{Colors.RED + Colors.BOLD}Please enter either 1, 2, 3, 4, 5, 6, 7, or 8.{Colors.RESET}")
             except ValueError:
-                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1, 2, 3, 4, 5, 6, or 7).{Colors.RESET}")
+                print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1, 2, 3, 4, 5, 6, 7, or 8).{Colors.RESET}")
 
         if option == 5:
             self.print_chat_question()
-
         elif option == 6:
             self.print_bridge_question()
-
         elif option == 7:
+            self.print_swap_question()
+        elif option == 8:
             while True:
                 auto_faucet = input(f"{Colors.YELLOW + Colors.BOLD}Auto Claim Kite Token Faucet? [y/n] -> {Colors.RESET}").strip()
                 if auto_faucet in ["y", "n"]:
@@ -609,7 +712,6 @@ class KiteAi:
                 auto_chat = input(f"{Colors.YELLOW + Colors.BOLD}Auto Chat With AI Agent? [y/n] -> {Colors.RESET}").strip()
                 if auto_chat in ["y", "n"]:
                     self.auto_chat = auto_chat == "y"
-
                     if self.auto_chat:
                         self.print_chat_question()
                     break
@@ -620,9 +722,18 @@ class KiteAi:
                 auto_bridge = input(f"{Colors.YELLOW + Colors.BOLD}Auto Perform Random Bridge? [y/n] -> {Colors.RESET}").strip()
                 if auto_bridge in ["y", "n"]:
                     self.auto_bridge = auto_bridge == "y"
-
                     if self.auto_bridge:
                         self.print_bridge_question()
+                    break
+                else:
+                    print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
+
+            while True:
+                auto_swap = input(f"{Colors.YELLOW + Colors.BOLD}Auto Perform Random Swap? [y/n] -> {Colors.RESET}").strip()
+                if auto_swap in ["y", "n"]:
+                    self.auto_swap = auto_swap == "y"
+                    if self.auto_swap:
+                        self.print_swap_question()
                     break
                 else:
                     print(f"{Colors.RED + Colors.BOLD}Please enter 'y' or 'n'.{Colors.RESET}")
@@ -646,7 +757,7 @@ class KiteAi:
                 print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number (1 or 2).{Colors.RESET}")
 
         rotate = False
-        if choose == 1: # Only ask about rotation if a proxy is chosen (now Private Proxy)
+        if choose == 1:
             while True:
                 rotate = input(f"{Colors.BLUE + Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip()
 
@@ -1051,7 +1162,7 @@ class KiteAi:
         tx_hash, block_number, amount_to_wei = await self.perform_bridge(account, address, rpc_url, dest_chain_id, src_address, amount, token_type, use_proxy)
         if tx_hash and block_number and amount_to_wei:
             logger.info("Bridge Transaction Success")
-            print(f"{Colors.CYAN}↪️ Tx hash {tx_hash} ✅ Explore {explorer}{tx_hash}{Colors.RESET}") # Modified output
+            print(f"{Colors.CYAN}↪️ Tx hash {tx_hash} ✅ Explore {explorer}{tx_hash}{Colors.RESET}")
 
             submit = await self.submit_bridge_transfer(address, src_chain_id, dest_chain_id, src_address, dest_address, amount_to_wei, tx_hash, use_proxy)
             if submit:
@@ -1059,6 +1170,14 @@ class KiteAi:
 
         else:
             logger.error("Perform On-Chain Bridge Failed")
+
+    async def process_perform_swap(self, account: str, address: str, rpc_url: str, token_in: str, amount: float, use_proxy: bool):
+        tx_hash, block_number, amount_to_wei = await self.perform_swap(account, address, rpc_url, token_in, amount, use_proxy)
+        if tx_hash and block_number and amount_to_wei:
+            logger.info("Swap Transaction Success")
+            print(f"{Colors.CYAN}↪️ Tx hash {tx_hash} ✅ Explore {self.KITE_AI['explorer']}{tx_hash}{Colors.RESET}")
+        else:
+            logger.error("Perform On-Chain Swap Failed")
 
     async def process_option_1(self, address: str, user: dict, use_proxy: bool):
         is_claimable = user.get("data", {}).get("faucet_claimable", False)
@@ -1145,7 +1264,7 @@ class KiteAi:
 
             agent = random.choice(self.agent_lists)
             agent_name = agent["agentName"]
-            service_id = agent["serviceId"] # Corrected key from 'service_id' to 'serviceId'
+            service_id = agent["serviceId"]
             questions = agent["questionLists"]
 
             if agent_name not in used_questions_per_agent:
@@ -1209,13 +1328,44 @@ class KiteAi:
             await self.process_perform_bridge(account, address, rpc_url, src_chain_id, dest_chain_id, src_address, dest_address, amount, token_type, explorer, use_proxy)
             await self.print_timer("Tx")
 
+    async def process_option_7(self, account: str, address: str, use_proxy: bool):
+        logger.step("Random Swap:")
+
+        for i in range(self.swap_count):
+            logger.info(f"Swap {i+1} / {self.swap_count}")
+
+            # Randomly choose between USDT->WKITE or WKITE->USDT
+            swap_direction = random.choice(["usdt_to_wkite", "wkite_to_usdt"])
+
+            if swap_direction == "usdt_to_wkite":
+                token_in = self.USDT_CONTRACT
+                token_out = "WKITE"
+            else:
+                token_in = self.WKITE_CONTRACT
+                token_out = "USDT"
+
+            amount = round(random.uniform(self.min_swap_amount, self.max_swap_amount), 6)
+
+            balance = await self.get_token_balance(address, self.KITE_AI["rpc_url"], token_in, "erc20", use_proxy)
+
+            logger.info(f"    Pair    : {token_in[:6]}...->{token_out}")
+            logger.info(f"    Balance : {balance} {token_out if swap_direction == 'wkite_to_usdt' else 'USDT'}")
+            logger.info(f"    Amount  : {amount} {token_out if swap_direction == 'wkite_to_usdt' else 'USDT'}")
+
+            if not balance or balance <= amount:
+                logger.warn(f"Insufficient {token_out if swap_direction == 'wkite_to_usdt' else 'USDT'} Token Balance. Skipping swap.")
+                continue
+
+            await self.process_perform_swap(account, address, self.KITE_AI["rpc_url"], token_in, amount, use_proxy)
+            await self.print_timer("Tx")
+
     async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
         while True:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-            if use_proxy: # Only print proxy info if proxy is actually being used
+            if use_proxy:
                 logger.info(f"Proxy     : {proxy}")
 
-            is_valid = True # Assume valid if no proxy is used
+            is_valid = True
             if use_proxy:
                 is_valid = await self.check_connection(proxy)
 
@@ -1244,7 +1394,6 @@ class KiteAi:
             return False
 
     async def process_accounts(self, account: str, address: str, option: int, use_proxy: bool, rotate_proxy: bool):
-        # Print masked address at the beginning of processing each account
         logger.info(f"Memproses akun: {self.mask_account(address)}")
 
         signed = await self.process_user_signin(address, use_proxy, rotate_proxy)
@@ -1280,7 +1429,10 @@ class KiteAi:
             elif option == 6:
                 await self.process_option_6(account, address, use_proxy)
 
-            else: # Option 7: Run All Features
+            elif option == 7:
+                await self.process_option_7(account, address, use_proxy)
+
+            else: # Option 8: Run All Features
                 if self.auto_faucet:
                     await self.process_option_1(address, user, use_proxy)
                     await asyncio.sleep(5)
@@ -1303,9 +1455,12 @@ class KiteAi:
 
                 if self.auto_bridge:
                     await self.process_option_6(account, address, use_proxy)
+                    await asyncio.sleep(5)
+
+                if self.auto_swap:
+                    await self.process_option_7(account, address, use_proxy)
 
     async def main(self):
-        # Define wib inside the main method or as a class attribute
         wib = pytz.timezone('Asia/Jakarta') 
         try:
             with open('accounts.txt', 'r') as file:
@@ -1326,14 +1481,14 @@ class KiteAi:
 
             while True:
                 use_proxy = False
-                if use_proxy_choice == 1: # Pilihan 1 sekarang adalah Private Proxy
+                if use_proxy_choice == 1:
                     use_proxy = True
 
                 self.clear_terminal()
-                await self.welcome() # Changed to await
+                await self.welcome()
                 logger.info(f"Total Akun: {len(accounts)}")
 
-                if use_proxy_choice == 1: # Hanya load proxy jika pilihan 1 (Private Proxy) dipilih
+                if use_proxy_choice == 1:
                     await self.load_proxies(use_proxy_choice)
 
                 for account in accounts:
@@ -1376,7 +1531,7 @@ class KiteAi:
                         self.auth_tokens[address] = auth_token
 
                         await self.process_accounts(account, address, option, use_proxy, rotate_proxy)
-                        await asyncio.sleep(3) # Small delay between accounts
+                        await asyncio.sleep(3)
 
                 seconds = 24 * 60 * 60
                 start_time_str = datetime.now(wib).strftime('%H:%M:%S')
