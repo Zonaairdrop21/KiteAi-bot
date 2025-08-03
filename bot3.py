@@ -1,6 +1,6 @@
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
-from web3.middleware import geth_poa_middleware
+from web3.middleware.poa import ExtraDataToPOAMiddleware
 from eth_account import Account
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -427,9 +427,9 @@ class KiteAi:
             try:
                 web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs=request_kwargs))
 
-                # Add Geth PoA middleware if RPC URL matches Kite AI
+                # Perbaikan: Menggunakan nama middleware yang baru untuk PoA
                 if rpc_url == self.KITE_AI["rpc_url"]:
-                    web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+                    web3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
                 
                 web3.eth.get_block_number()
                 return web3
@@ -697,7 +697,7 @@ class KiteAi:
                     self.max_swap_amount = max_swap_amount
                     break
                 else:
-                    print(f"{Colors.RED + Colors.BOLD}Amount must be >= Min Swap Amount.{Colors.RESET}")
+                    print(f"{Colors.RED + Colors.BOLD}Amount must be >= Min Bridge Amount.{Colors.RESET}")
             except ValueError:
                 print(f"{Colors.RED + Colors.BOLD}Invalid input. Enter a number.{Colors.RESET}")
 
